@@ -1,0 +1,83 @@
+/* CompanyGPT Design System */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================
+   Design Tokens (506 Style)
+   ========================= */
+:root {
+  /* Core surfaces - WHITE background */
+  --white: #ffffff;
+  --bg-primary: var(--white);
+  --bg-secondary: var(--white);
+  --hover-bg: rgba(0, 0, 0, 0.05);
+
+  /* Text */
+  --text-primary: #1f2937;
+  --text-secondary: #5f6368;
+  --text-muted: #6b7280;
+
+  /* Lines / Borders */
+  --border: #eceae6;
+
+  /* Blues (506 Brand) */
+  --blue-50: #f0f9ff;
+  --blue-500: #0ea5e9;
+  --blue-600: #0284c7;
+  --blue-700: #0369a1;
+
+  /* Feedback */
+  --danger: #ef4444;
+  --success: #22c55e;
+
+  /* Neutral tints */
+  --tint-gray-50: #f3f4f6;
+  --tint-gray-100: #f6f7f9;
+
+  /* Shadows */
+  --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.15);
+
+  /* Radii */
+  --r-xxs: 3px;
+  --r-xs: 4px;
+  --r-s: 6px;
+  --r-m: 8px;
+  --r-l: 10px;
+  --r-xl: 12px;
+  --r-2xl: 14px;
+  --r-3xl: 20px;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #0f1114;
+    --bg-secondary: #0f1114;
+    --text-primary: #e5e7eb;
+    --text-secondary: #ababab;
+    --text-muted: #6b6b6b;
+    --border: #23262b;
+    --tint-gray-100: #101418;
+  }
+}
+
+/* Base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
