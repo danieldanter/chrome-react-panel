@@ -1,5 +1,5 @@
 // src/panel/types/index.ts
-// All TypeScript interfaces for the app
+// All TypeScript interfaces for the application
 
 export interface Message {
   id: string;
@@ -11,6 +11,7 @@ export interface Message {
 }
 
 export interface ChatPayload {
+  id: null | string;
   folderId: string;
   messages: {
     role: string;
@@ -18,39 +19,37 @@ export interface ChatPayload {
     references: unknown[];
     sources: unknown[];
   }[];
-  model: string;
+  model: {
+    id: string;
+    maxLength: number;
+    name: string;
+    tokenLimit: number;
+  };
   name: string;
   roleId: string;
   selectedAssistantId: string;
   selectedDataCollections: string[];
   selectedFiles: unknown[];
-  selectedMode: "chat" | "datenspeicher";
+  selectedMode: "BASIC" | "QA" | "chat" | "datenspeicher";
   temperature: number;
-}
-
-export interface PageContext {
-  url: string;
-  title: string;
-  content: string;
-  type: "gmail" | "gdocs" | "sharepoint" | "web" | null;
-  isEmail?: boolean;
-  isGmail?: boolean;
-  isOutlook?: boolean;
-  emailProvider?: string;
-  emailData?: unknown;
 }
 
 export interface Folder {
   id: string;
   type: string;
   name: string;
+  parentId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Role {
   id: string;
   roleId?: string;
   name: string;
+  description?: string;
   defaultRole?: boolean;
+  isActive?: boolean;
 }
 
 export interface AuthState {

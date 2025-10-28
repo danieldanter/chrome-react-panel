@@ -1,18 +1,60 @@
 {
   "manifest_version": 3,
-  "name": "My Chrome Panel",
+  "name": "CompanyGPT Chat React version",
   "version": "1.0.0",
-  "description": "Chrome panel with React",
-  "permissions": ["sidePanel", "activeTab", "storage", "tabs"],
+  "description": "AI Chat assistant for CompanyGPT",
+
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "storage",
+    "tabs",
+    "cookies",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://*.506.ai/*",
+    "https://docs.google.com/*",
+    "https://mail.google.com/*",
+    "https://*.sharepoint.com/*",
+    "https://*.office.com/*",
+    "https://*.office365.com/*",
+    "<all_urls>"
+  ],
+
   "background": {
     "service_worker": "background.js"
   },
+
   "side_panel": {
     "default_path": "panel.html"
   },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "*://docs.google.com/*",
+        "*://mail.google.com/*",
+        "*://*.sharepoint.com/*",
+        "*://*.office.com/*",
+        "*://*.office365.com/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+
   "action": {
-    "default_title": "Open Panel"
+    "default_title": "Open CompanyGPT Chat",
+    "default_icon": {
+      "16": "icon-16.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
   },
+
   "icons": {
     "16": "icon-16.png",
     "48": "icon-48.png",

@@ -1,5 +1,5 @@
 // src/panel/services/chrome.ts
-// Wrapper for Chrome Extension APIs
+// Chrome Extension API wrapper
 
 /**
  * Send a message to the background service worker
@@ -9,10 +9,14 @@ export async function sendToBackground<T = unknown>(
   data?: unknown
 ): Promise<T> {
   try {
+    console.log("[Chrome Service] Sending message:", action, data);
+
     const response = await chrome.runtime.sendMessage({
       action,
       data,
     });
+
+    console.log("[Chrome Service] Response:", response);
 
     if (!response) {
       throw new Error("No response from background");
@@ -26,6 +30,38 @@ export async function sendToBackground<T = unknown>(
   } catch (error: unknown) {
     console.error("[Chrome Service] Error:", error);
     throw new Error((error as Error).message || "Chrome API error");
+  }
+}
+
+/**
+ * Make an API request through background worker (CORS bypass!)
+ */
+
+export async function apiRequest<T = unknown>(
+  url: string,
+  options: {
+    method?: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+  } = {}
+): Promise<T> {
+  try {
+    console.log("[Chrome Service] API Request:", url);
+
+    const response = await sendToBackground<T>("API_REQUEST", {
+      url,
+      method: options.method || "GET",
+      headers: options.headers || {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+
+    return response;
+  } catch (error) {
+    console.error("[Chrome Service] API request failed:", error);
+    throw error;
   }
 }
 

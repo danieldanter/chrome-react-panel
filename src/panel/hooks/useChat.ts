@@ -11,7 +11,12 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null);
   const [folderId, setFolderId] = useState<string>("");
   const [roleId, setRoleId] = useState<string>("");
-  const [model, setModel] = useState<string>("gpt-4");
+  const [model, setModel] = useState({
+    id: "gemini-2.5-flash",
+    maxLength: 980000,
+    name: "Gemini 2.5 Flash",
+    tokenLimit: 980000,
+  });
 
   // Initialize folders and roles
   const initialize = useCallback(async () => {
@@ -46,7 +51,11 @@ export function useChat() {
 
   // Send a message
   const sendMessage = useCallback(
-    async (content: string, mode: "chat" | "datenspeicher" = "chat") => {
+    async (
+      content: string,
+      useDataCollection: boolean = false,
+      dataCollectionId?: string
+    ) => {
       if (!content.trim() || loading) return;
 
       console.log("[useChat] Sending message:", content);
@@ -67,8 +76,12 @@ export function useChat() {
       setError(null);
 
       try {
+        // Determine selectedMode based on whether we're using data collection
+        const selectedMode = useDataCollection ? "QA" : "BASIC";
+
         // Build payload
         const payload: ChatPayload = {
+          id: null,
           folderId,
           messages: [
             ...messages.map((msg) => ({
@@ -85,12 +98,13 @@ export function useChat() {
             },
           ],
           model,
-          name: "Chat",
+          name: "Neuer Chat",
           roleId,
           selectedAssistantId: "",
-          selectedDataCollections: [],
+          selectedDataCollections:
+            useDataCollection && dataCollectionId ? [dataCollectionId] : [],
           selectedFiles: [],
-          selectedMode: mode,
+          selectedMode, // "BASIC" or "QA"
           temperature: 0.2,
         };
 
@@ -102,19 +116,29 @@ export function useChat() {
 
         // Parse response
         let assistantContent = "";
+
         if (typeof response === "string") {
           assistantContent = response;
-        } else if (response.content) {
-          assistantContent = response.content;
-        } else if (response.message) {
-          assistantContent = response.message;
+        } else if (response && typeof response === "object") {
+          const apiResponse = response as {
+            content?: string;
+            message?: string;
+          };
+
+          if (apiResponse.content) {
+            assistantContent = apiResponse.content;
+          } else if (apiResponse.message) {
+            assistantContent = apiResponse.message;
+          } else {
+            assistantContent = JSON.stringify(response);
+          }
         } else {
           assistantContent = JSON.stringify(response);
         }
 
         // Create assistant message
         const assistantMessage: Message = {
-          id: `msg-${Date.now()}-assistant`,
+          id: `msg-${Date.now()}`,
           role: "assistant",
           content: assistantContent,
           timestamp: Date.now(),
@@ -122,26 +146,16 @@ export function useChat() {
           sources: [],
         };
 
-        // Add assistant message
-        setMessages((prev) => [...prev, assistantMessage]);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+        // Add both messages to state
+        setMessages((prev) => [...prev, userMessage, assistantMessage]);
+      } catch (err) {
         console.error("[useChat] Send failed:", err);
-        setError(err.message || "Failed to send message");
-
-        // Add error message
-        const errorMessage: Message = {
-          id: `msg-${Date.now()}-error`,
-          role: "system",
-          content: `❌ Error: ${err.message || "Failed to send message"}`,
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
+        setError((err as Error).message);
       } finally {
         setLoading(false);
       }
     },
-    [messages, loading, folderId, roleId, model]
+    [loading, messages, folderId, model, roleId]
   );
 
   // Clear messages

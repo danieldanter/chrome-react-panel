@@ -1,7 +1,7 @@
 // src/panel/services/api.ts
-// Communication with CompanyGPT API
+// CompanyGPT API communication (via background worker for CORS bypass)
 
-import { sendToBackground, getStorage, setStorage } from "./chrome";
+import { sendToBackground, apiRequest, getStorage } from "./chrome";
 import type { ChatPayload, Folder, Role, AuthState } from "../types";
 
 /**
@@ -9,8 +9,12 @@ import type { ChatPayload, Folder, Role, AuthState } from "../types";
  */
 export async function checkAuth(): Promise<AuthState> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await sendToBackground<any>("CHECK_AUTH");
+    console.log("[API] Checking auth...");
+
+    const response = await sendToBackground<AuthState>("CHECK_AUTH");
+
+    console.log("[API] Auth response:", response);
+
     return {
       isAuthenticated: response.isAuthenticated || false,
       domain: response.domain || null,
@@ -29,12 +33,45 @@ export async function checkAuth(): Promise<AuthState> {
 }
 
 /**
+ * Get active domain
+ */
+export async function getDomain(): Promise<string | null> {
+  try {
+    const authState = await checkAuth();
+    if (authState.domain) {
+      return authState.domain;
+    }
+
+    return await getStorage<string>("lastKnownDomain");
+  } catch (error) {
+    console.error("[API] Get domain failed:", error);
+    return null;
+  }
+}
+
+/**
  * Fetch available folders
  */
 export async function fetchFolders(): Promise<Folder[]> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await sendToBackground<any>("FETCH_FOLDERS");
+    const domain = await getDomain();
+    if (!domain) {
+      console.error("[API] No domain available");
+      return [];
+    }
+
+    console.log("[API] Fetching folders...");
+
+    // Use generic apiRequest (goes through background worker)
+    const response = await apiRequest<{ folders: Folder[] }>(
+      `https://${domain}.506.ai/api/folders`,
+      {
+        method: "GET",
+      }
+    );
+
+    console.log("[API] Folders response:", response);
+
     return response.folders || [];
   } catch (error) {
     console.error("[API] Fetch folders failed:", error);
@@ -47,8 +84,23 @@ export async function fetchFolders(): Promise<Folder[]> {
  */
 export async function fetchRoles(): Promise<Role[]> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await sendToBackground<any>("FETCH_ROLES");
+    const domain = await getDomain();
+    if (!domain) {
+      console.error("[API] No domain available");
+      return [];
+    }
+
+    console.log("[API] Fetching roles...");
+
+    const response = await apiRequest<{ roles: Role[] }>(
+      `https://${domain}.506.ai/api/roles`,
+      {
+        method: "GET",
+      }
+    );
+
+    console.log("[API] Roles response:", response);
+
     return response.roles || [];
   } catch (error) {
     console.error("[API] Fetch roles failed:", error);
@@ -59,12 +111,23 @@ export async function fetchRoles(): Promise<Role[]> {
 /**
  * Send chat message
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function sendChatMessage(payload: ChatPayload): Promise<any> {
+export async function sendChatMessage(payload: ChatPayload): Promise<unknown> {
   try {
-    console.log("[API] Sending chat message:", payload);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await sendToBackground<any>("SEND_CHAT_MESSAGE", payload);
+    const domain = await getDomain();
+    if (!domain) {
+      throw new Error("No domain available");
+    }
+
+    console.log("[API] Sending chat message...");
+    console.log("[API] Payload:", payload);
+
+    const response = await apiRequest(`https://${domain}.506.ai/api/qr/chat`, {
+      method: "POST",
+      body: payload,
+    });
+
+    console.log("[API] Chat response:", response);
+
     return response;
   } catch (error) {
     console.error("[API] Send chat message failed:", error);
@@ -73,15 +136,39 @@ export async function sendChatMessage(payload: ChatPayload): Promise<any> {
 }
 
 /**
- * Get domain from storage
+ * Get page context from content script
  */
-export async function getDomain(): Promise<string | null> {
-  return await getStorage<string>("activeDomain");
-}
-
 /**
- * Set domain in storage
+ * Get page context from content script
  */
-export async function setDomain(domain: string): Promise<void> {
-  await setStorage("activeDomain", domain);
+export async function getPageContext(): Promise<{
+  success: boolean;
+  content?: string;
+  url?: string;
+  title?: string;
+  type?: string;
+  error?: string;
+}> {
+  try {
+    console.log("[API] Getting page context...");
+
+    const response = await sendToBackground<{
+      success: boolean;
+      content?: string;
+      url?: string;
+      title?: string;
+      type?: string;
+      error?: string;
+    }>("GET_PAGE_CONTEXT");
+
+    console.log("[API] Context response:", response);
+
+    return response;
+  } catch (error) {
+    console.error("[API] Get page context failed:", error);
+    return {
+      success: false,
+      error: (error as Error).message,
+    };
+  }
 }

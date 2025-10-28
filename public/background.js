@@ -1,9 +1,12 @@
-// Background Service Worker
+// background.js
+// Background Service Worker with CORS bypass
+
 console.log("[Background] Service worker started");
 
-// API base configuration
+// Configuration
 const API_BASE = "506.ai";
 const COOKIE_NAME = "__Secure-next-auth.session-token";
+const DEBUG = true;
 
 // Auth cache
 let authCache = {
@@ -11,238 +14,273 @@ let authCache = {
   activeDomain: null,
   lastCheck: 0,
   TTL: 30000, // 30 seconds
+  hasMultipleDomains: false,
+  availableDomains: [],
 };
 
-// Open side panel when extension icon clicked
-chrome.action.onClicked.addListener(async (tab) => {
-  console.log("[Background] Extension icon clicked");
-  if (tab.id) {
-    await chrome.sidePanel.open({ tabId: tab.id });
-  }
-});
+// Active tab tracking
+let activeTabId = null;
 
-// Handle messages from panel
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log("[Background] Received message:", request.action);
+// Debug helper
+const debug = (...args) => {
+  if (DEBUG) console.log("[Background]", ...args);
+};
 
-  handleMessage(request, sender, sendResponse);
-  return true; // Keep channel open for async response
-});
+// ============================================
+// DOMAIN DETECTION
+// ============================================
 
-async function handleMessage(request, sender, sendResponse) {
-  const { action, data } = request;
-
+async function detectActiveDomain() {
   try {
-    switch (action) {
-      case "CHECK_AUTH":
-        await handleCheckAuth(sendResponse);
-        break;
-
-      case "FETCH_FOLDERS":
-        await handleFetchFolders(sendResponse);
-        break;
-
-      case "FETCH_ROLES":
-        await handleFetchRoles(sendResponse);
-        break;
-
-      case "SEND_CHAT_MESSAGE":
-        await handleSendChatMessage(data, sendResponse);
-        break;
-
-      case "GET_PAGE_INFO":
-        await handleGetPageInfo(sendResponse);
-        break;
-
-      default:
-        sendResponse({ success: false, error: "Unknown action" });
-    }
-  } catch (error) {
-    console.error("[Background] Error:", error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-// Check authentication
-async function handleCheckAuth(sendResponse) {
-  try {
-    const domain = await getActiveDomain();
-
-    if (!domain) {
-      sendResponse({
-        success: true,
-        isAuthenticated: false,
-        domain: null,
-        hasMultipleDomains: false,
-        availableDomains: [],
-      });
-      return;
-    }
-
-    const cookie = await chrome.cookies.get({
-      url: `https://${domain}.${API_BASE}`,
+    const cookies = await chrome.cookies.getAll({
+      domain: ".506.ai",
       name: COOKIE_NAME,
     });
 
-    sendResponse({
-      success: true,
-      isAuthenticated: !!cookie,
-      domain: domain,
-      hasMultipleDomains: false,
-      availableDomains: [domain],
-    });
-  } catch (error) {
-    console.error("[Background] Check auth error:", error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-// Fetch folders
-async function handleFetchFolders(sendResponse) {
-  try {
-    const domain = await getActiveDomain();
-    if (!domain) throw new Error("No domain configured");
-
-    const url = `https://${domain}.${API_BASE}/api/folders`;
-    console.log("[Background] Fetching folders from:", url);
-
-    const response = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    if (!cookies || cookies.length === 0) {
+      debug("No cookies found");
+      return { domain: null, hasMultiple: false, availableDomains: [] };
     }
 
-    const data = await response.json();
-    console.log("[Background] Folders response:", data);
-
-    sendResponse({
-      success: true,
-      data: data,
+    // Sort by most recent
+    cookies.sort((a, b) => {
+      const timeA = a.lastAccessed || a.expirationDate || 0;
+      const timeB = b.lastAccessed || b.expirationDate || 0;
+      return timeB - timeA;
     });
+
+    // Extract unique subdomains
+    const domains = cookies
+      .map((cookie) => cookie.domain.replace(/^\./, "").replace(".506.ai", ""))
+      .filter(Boolean);
+
+    const uniqueDomains = [...new Set(domains)];
+    const activeDomain = domains[0] || null;
+
+    debug(`Active domain: ${activeDomain}`);
+
+    return {
+      domain: activeDomain,
+      hasMultiple: uniqueDomains.length > 1,
+      availableDomains: uniqueDomains,
+    };
   } catch (error) {
-    console.error("[Background] Fetch folders error:", error);
-    sendResponse({ success: false, error: error.message });
+    console.error("Domain detection failed:", error);
+    return { domain: null, hasMultiple: false, availableDomains: [] };
   }
 }
 
-// Fetch roles
-async function handleFetchRoles(sendResponse) {
+async function checkAuth(skipCache = false) {
+  if (!skipCache && authCache.isAuthenticated !== null) {
+    if (Date.now() - authCache.lastCheck < authCache.TTL) {
+      debug(`Auth cache hit - Domain: ${authCache.activeDomain}`);
+      return authCache.isAuthenticated;
+    }
+  }
+
   try {
-    const domain = await getActiveDomain();
-    if (!domain) throw new Error("No domain configured");
+    const domainInfo = await detectActiveDomain();
 
-    const url = `https://${domain}.${API_BASE}/api/roles`;
-    console.log("[Background] Fetching roles from:", url);
-
-    const response = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    if (!domainInfo.domain) {
+      debug("No active domain found");
+      authCache.isAuthenticated = false;
+      authCache.lastCheck = Date.now();
+      authCache.activeDomain = null;
+      return false;
     }
 
-    const data = await response.json();
-    console.log("[Background] Roles response:", data);
+    authCache.activeDomain = domainInfo.domain;
+    authCache.hasMultipleDomains = domainInfo.hasMultiple;
+    authCache.availableDomains = domainInfo.availableDomains;
 
-    sendResponse({
-      success: true,
-      data: data,
+    await chrome.storage.local.set({ lastKnownDomain: domainInfo.domain });
+
+    const cookie = await chrome.cookies.get({
+      url: `https://${domainInfo.domain}.506.ai`,
+      name: COOKIE_NAME,
     });
+
+    authCache.isAuthenticated = !!cookie;
+    authCache.lastCheck = Date.now();
+
+    debug(
+      `Auth check complete - Domain: ${domainInfo.domain}, Auth: ${authCache.isAuthenticated}`
+    );
+
+    return authCache.isAuthenticated;
   } catch (error) {
-    console.error("[Background] Fetch roles error:", error);
-    sendResponse({ success: false, error: error.message });
+    console.error("Auth check failed:", error);
+    authCache.isAuthenticated = false;
+    authCache.lastCheck = Date.now();
+    return false;
   }
 }
 
-// Send chat message
-async function handleSendChatMessage(payload, sendResponse) {
+// ============================================
+// GENERIC API REQUEST HANDLER (CORS BYPASS!)
+// ============================================
+
+async function handleAPIRequest(data) {
+  debug("API Request:", data.url);
+
   try {
-    const domain = await getActiveDomain();
-    if (!domain) throw new Error("No domain configured");
-
-    const url = `https://${domain}.${API_BASE}/api/qr/chat`;
-    console.log("[Background] Sending chat to:", url);
-    console.log("[Background] Payload:", payload);
-
-    const response = await fetch(url, {
-      method: "POST",
-      credentials: "include",
-      headers: {
+    const options = {
+      method: data.method || "GET",
+      headers: data.headers || {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      body: JSON.stringify(payload),
-    });
+      credentials: "include", // Important: includes cookies!
+    };
+
+    if (data.body && data.method !== "GET") {
+      options.body = data.body;
+    }
+
+    const response = await fetch(data.url, options);
+    debug("Response status:", response.status);
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const errorText = await response.text();
+      debug("Error response:", errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
     const text = await response.text();
-    console.log("[Background] Chat response:", text);
 
-    // Try to parse as JSON
-    let data;
     try {
-      data = JSON.parse(text);
+      const json = JSON.parse(text);
+      return { success: true, data: json };
     } catch {
-      data = text;
+      return { success: true, data: text };
     }
-
-    sendResponse({
-      success: true,
-      data: data,
-    });
   } catch (error) {
-    console.error("[Background] Send chat error:", error);
-    sendResponse({ success: false, error: error.message });
+    console.error("API request failed:", error);
+    return { success: false, error: error.message };
   }
 }
 
-// Get page info
-async function handleGetPageInfo(sendResponse) {
-  try {
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
+// ============================================
+// MESSAGE HANDLERS
+// ============================================
 
-    sendResponse({
-      success: true,
-      title: tab?.title || "",
-      url: tab?.url || "",
-    });
-  } catch (error) {
-    console.error("[Background] Get page info error:", error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  debug("Received message:", request.action || request.type);
 
-// Get active domain
-async function getActiveDomain() {
-  try {
-    // Try to get from storage first
-    const result = await chrome.storage.local.get("activeDomain");
-    if (result.activeDomain) {
-      return result.activeDomain;
+  (async () => {
+    try {
+      const action = request.action || request.type;
+
+      switch (action) {
+        case "CHECK_AUTH": {
+          const isAuthenticated = await checkAuth(request.skipCache);
+          sendResponse({
+            success: true,
+            isAuthenticated,
+            domain: authCache.activeDomain,
+            hasMultipleDomains: authCache.hasMultipleDomains,
+            availableDomains: authCache.availableDomains,
+          });
+          break;
+        }
+
+        case "API_REQUEST": {
+          const result = await handleAPIRequest(request.data);
+          sendResponse(result);
+          break;
+        }
+
+        case "FETCH_FOLDERS": {
+          const domain = authCache.activeDomain;
+          if (!domain) {
+            sendResponse({ success: false, error: "No domain configured" });
+            break;
+          }
+
+          const result = await handleAPIRequest({
+            url: `https://${domain}.${API_BASE}/api/folders`,
+            method: "GET",
+          });
+
+          sendResponse(result);
+          break;
+        }
+
+        case "FETCH_ROLES": {
+          const domain = authCache.activeDomain;
+          if (!domain) {
+            sendResponse({ success: false, error: "No domain configured" });
+            break;
+          }
+
+          const result = await handleAPIRequest({
+            url: `https://${domain}.${API_BASE}/api/roles`,
+            method: "GET",
+          });
+
+          sendResponse(result);
+          break;
+        }
+
+        case "SEND_CHAT_MESSAGE": {
+          const domain = authCache.activeDomain;
+          if (!domain) {
+            sendResponse({ success: false, error: "No domain configured" });
+            break;
+          }
+
+          const result = await handleAPIRequest({
+            url: `https://${domain}.${API_BASE}/api/qr/chat`,
+            method: "POST",
+            body: JSON.stringify(request.data),
+          });
+
+          sendResponse(result);
+          break;
+        }
+
+        case "GET_PAGE_CONTEXT": {
+          if (!activeTabId) {
+            sendResponse({ success: false, error: "No active tab" });
+            break;
+          }
+
+          try {
+            const response = await chrome.tabs.sendMessage(activeTabId, {
+              action: "EXTRACT_CONTENT",
+            });
+            sendResponse(response);
+          } catch (error) {
+            debug("Content script not available:", error);
+            sendResponse({
+              success: false,
+              error: "Content script not loaded",
+            });
+          }
+          break;
+        }
+
+        default:
+          debug("Unknown action:", action);
+          sendResponse({ success: false, error: "Unknown action" });
+      }
+    } catch (error) {
+      console.error(`Error handling ${request.action}:`, error);
+      sendResponse({ success: false, error: error.message });
     }
+  })();
 
-    // Default domain (you can change this to your domain)
-    return "companygpt"; // Change to your actual domain
-  } catch (error) {
-    console.error("[Background] Get domain error:", error);
-    return null;
-  }
-}
+  return true; // Keep message channel open
+});
 
-console.log("[Background] Service worker ready");
+// ============================================
+// EXTENSION ICON CLICK
+// ============================================
+
+chrome.action.onClicked.addListener(async (tab) => {
+  debug("Extension icon clicked");
+  activeTabId = tab.id;
+  await chrome.sidePanel.open({ tabId: tab.id });
+});
+
+debug("Service worker initialized! 🚀");
