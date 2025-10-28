@@ -1,16 +1,15 @@
-/* CompanyGPT Design System */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* src/index.css - Complete CSS Variables matching vanilla version */
+
+@import "tailwindcss";
 
 /* =========================
    Design Tokens (506 Style)
    ========================= */
 :root {
-  /* Core surfaces - WHITE background */
+  /* Core surfaces */
   --white: #ffffff;
-  --bg-primary: var(--white);
-  --bg-secondary: var(--white);
+  --bg-primary: #ffffff;
+  --bg-secondary: #ffffff;
   --hover-bg: rgba(0, 0, 0, 0.05);
 
   /* Text */
@@ -21,7 +20,7 @@
   /* Lines / Borders */
   --border: #eceae6;
 
-  /* Blues (506 Brand) */
+  /* Blues */
   --blue-50: #f0f9ff;
   --blue-500: #0ea5e9;
   --blue-600: #0284c7;
@@ -39,31 +38,39 @@
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.15);
 
-  /* Radii */
+  /* Overlays */
+  --overlay-light: rgba(255, 255, 255, 0.95);
+  --overlay-dark: rgba(15, 17, 20, 0.95);
+
+  /* Border Radius - CORRECTED VALUES */
   --r-xxs: 3px;
   --r-xs: 4px;
   --r-s: 6px;
   --r-m: 8px;
   --r-l: 10px;
   --r-xl: 12px;
-  --r-2xl: 14px;
-  --r-3xl: 20px;
+  --r-2xl: 14px; /* ✅ FIXED: Was 20px, should be 14px for messages */
+  --r-3xl: 20px; /* ✅ FIXED: Added this for input */
 }
 
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
   :root {
+    --white: #1a1b1e;
     --bg-primary: #0f1114;
     --bg-secondary: #0f1114;
     --text-primary: #e5e7eb;
     --text-secondary: #ababab;
     --text-muted: #6b6b6b;
     --border: #23262b;
+    --hover-bg: rgba(255, 255, 255, 0.05);
     --tint-gray-100: #101418;
   }
 }
 
-/* Base */
+/* =========================
+   Reset / Base
+   ========================= */
 * {
   margin: 0;
   padding: 0;
@@ -71,13 +78,132 @@
 }
 
 html,
-body,
-#root {
+body {
   height: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   font-size: 14px;
   line-height: 1.5;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* =========================
+   Animations
+   ========================= */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes thinkingPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes blink {
+  0%,
+  50%,
+  100% {
+    opacity: 1;
+  }
+  25%,
+  75% {
+    opacity: 0;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes checkIn {
+  from {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* =========================
+   Scrollbar Styling
+   ========================= */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* =========================
+   Utility Classes
+   ========================= */
+.fade-in {
+  animation: fadeIn 0.3s ease;
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.3s ease;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
 }

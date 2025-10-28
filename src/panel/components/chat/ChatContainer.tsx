@@ -3,8 +3,8 @@
 
 import { useEffect } from "react";
 import { useChat } from "../../hooks/useChat";
-import MessageList from "./MessageList.tsx";
-import MessageInput from "./MessageInput.tsx";
+import MessageList from "./MessageList";
+import MessageInput from "./MessageInput";
 
 function ChatContainer() {
   const { messages, loading, sendMessage, initialize } = useChat();
@@ -22,7 +22,7 @@ function ChatContainer() {
       </div>
 
       {/* Input Area */}
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <MessageInput onSend={sendMessage} disabled={loading} />
       </div>
     </div>

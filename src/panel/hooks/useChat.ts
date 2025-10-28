@@ -70,7 +70,7 @@ export function useChat() {
         sources: [],
       };
 
-      // Add user message to state
+      // Add user message to state ONCE
       setMessages((prev) => [...prev, userMessage]);
       setLoading(true);
       setError(null);
@@ -146,8 +146,8 @@ export function useChat() {
           sources: [],
         };
 
-        // Add both messages to state
-        setMessages((prev) => [...prev, userMessage, assistantMessage]);
+        // 🔧 FIX: Only add assistant message (user message already added above)
+        setMessages((prev) => [...prev, assistantMessage]);
       } catch (err) {
         console.error("[useChat] Send failed:", err);
         setError((err as Error).message);

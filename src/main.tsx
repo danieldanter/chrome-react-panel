@@ -1,10 +1,8 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
+// src/panel/main.tsx
+// Entry point without StrictMode to prevent double rendering
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+import ReactDOM from "react-dom/client";
+import Panel from "./panel/Panel.tsx"; // ✅ Correct
+import "../index.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(<Panel />);
