@@ -1,5 +1,6 @@
 // background.js
 // Background Service Worker with CORS bypass + Emergency Content Extraction
+// ✅ IMPROVED: Now properly validates authentication and broadcasts 401 errors
 
 console.log("[Background] Service worker started");
 
@@ -131,10 +132,53 @@ async function detectActiveDomain() {
   }
 }
 
+// ============================================
+// ✅ IMPROVED: VALIDATE AUTHENTICATION WITH TEST API CALL
+// ============================================
+
+async function validateAuthWithAPI(domain) {
+  try {
+    debug(`Validating auth with API call to ${domain}.506.ai...`);
+
+    // Make a lightweight API call to verify the session is valid
+    const response = await fetch(`https://${domain}.506.ai/api/folders`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      credentials: "include",
+    });
+
+    debug(`Validation API response status: ${response.status}`);
+
+    // If we get 401, the session is invalid
+    if (response.status === 401) {
+      debug("❌ Session validation failed - 401 Unauthorized");
+      return false;
+    }
+
+    // Any other error (403, 500, etc.) - assume not authenticated
+    if (!response.ok) {
+      debug(`⚠️ Session validation uncertain - HTTP ${response.status}`);
+      return false;
+    }
+
+    debug("✅ Session validation successful");
+    return true;
+  } catch (error) {
+    console.error("Session validation error:", error);
+    return false; // On error, assume not authenticated
+  }
+}
+
 async function checkAuth(skipCache = false) {
+  // Use cache if available and not expired
   if (!skipCache && authCache.isAuthenticated !== null) {
     if (Date.now() - authCache.lastCheck < authCache.TTL) {
-      debug(`Auth cache hit - Domain: ${authCache.activeDomain}`);
+      debug(
+        `Auth cache hit - Domain: ${authCache.activeDomain}, Authenticated: ${authCache.isAuthenticated}`
+      );
       return authCache.isAuthenticated;
     }
   }
@@ -143,7 +187,7 @@ async function checkAuth(skipCache = false) {
     const domainInfo = await detectActiveDomain();
 
     if (!domainInfo.domain) {
-      debug("No active domain found");
+      debug("❌ No active domain found");
       authCache.isAuthenticated = false;
       authCache.lastCheck = Date.now();
       authCache.activeDomain = null;
@@ -156,24 +200,78 @@ async function checkAuth(skipCache = false) {
 
     await chrome.storage.local.set({ lastKnownDomain: domainInfo.domain });
 
+    // Check if cookie exists
     const cookie = await chrome.cookies.get({
       url: `https://${domainInfo.domain}.506.ai`,
       name: COOKIE_NAME,
     });
 
-    authCache.isAuthenticated = !!cookie;
+    if (!cookie) {
+      debug("❌ No auth cookie found");
+      authCache.isAuthenticated = false;
+      authCache.lastCheck = Date.now();
+      return false;
+    }
+
+    // ✅ NEW: Validate the session with a real API call
+    const isValid = await validateAuthWithAPI(domainInfo.domain);
+
+    authCache.isAuthenticated = isValid;
     authCache.lastCheck = Date.now();
 
     debug(
-      `Auth check complete - Domain: ${domainInfo.domain}, Auth: ${authCache.isAuthenticated}`
+      `Auth check complete - Domain: ${
+        domainInfo.domain
+      }, Cookie exists: YES, Valid session: ${isValid ? "YES ✅" : "NO ❌"}`
     );
 
-    return authCache.isAuthenticated;
+    return isValid;
   } catch (error) {
     console.error("Auth check failed:", error);
     authCache.isAuthenticated = false;
     authCache.lastCheck = Date.now();
     return false;
+  }
+}
+
+// ============================================
+// ✅ IMPROVED: CLEAR AUTH CACHE (called on 401)
+// ============================================
+
+function clearAuthCache() {
+  debug("🔄 Clearing auth cache");
+  authCache = {
+    isAuthenticated: false,
+    activeDomain: authCache.activeDomain, // Keep domain
+    lastCheck: 0,
+    TTL: authCache.TTL,
+    hasMultipleDomains: authCache.hasMultipleDomains,
+    availableDomains: authCache.availableDomains,
+  };
+}
+
+// ============================================
+// ✅ IMPROVED: BROADCAST 401 ERROR TO PANEL
+// ============================================
+
+async function broadcast401Error() {
+  debug("📢 Broadcasting 401 error to panel");
+
+  // Clear auth cache immediately
+  clearAuthCache();
+
+  try {
+    // Send message to all extension contexts (panel, popup, etc.)
+    await chrome.runtime.sendMessage({
+      action: "AUTH_ERROR_401",
+      data: {
+        reason: "Session expired or invalid",
+        timestamp: Date.now(),
+      },
+    });
+  } catch (error) {
+    // Ignore if no listeners (panel might not be open)
+    debug("Could not broadcast 401 (no listeners):", error.message);
   }
 }
 
@@ -200,6 +298,16 @@ async function handleAPIRequest(data) {
 
     const response = await fetch(data.url, options);
     debug("Response status:", response.status);
+
+    // ✅ NEW: Handle 401 errors
+    if (response.status === 401) {
+      debug("❌ 401 Unauthorized detected!");
+
+      // Broadcast 401 error to panel
+      await broadcast401Error();
+
+      throw new Error("HTTP 401: Session expired or invalid");
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -283,7 +391,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
         }
 
-        case "SEND_CHAT_MESSAGE": {
+        case "SEND_CHAT": {
           const domain = authCache.activeDomain;
           if (!domain) {
             sendResponse({ success: false, error: "No domain configured" });
@@ -291,7 +399,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           }
 
           const result = await handleAPIRequest({
-            url: `https://${domain}.${API_BASE}/api/qr/chat`,
+            url: `https://${domain}.${API_BASE}/api/chats`,
             method: "POST",
             body: JSON.stringify(request.data),
           });
@@ -300,19 +408,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
         }
 
-        case "GET_PAGE_CONTEXT": {
+        case "GET_PAGE_CONTEXT":
+        case "EXTRACT_CONTENT": {
+          debug("Content extraction requested");
+
+          // Make sure we have an active tab ID
           if (!activeTabId) {
-            sendResponse({ success: false, error: "No active tab" });
+            const tabs = await chrome.tabs.query({
+              active: true,
+              currentWindow: true,
+            });
+            if (tabs[0]) {
+              activeTabId = tabs[0].id;
+            }
+          }
+
+          if (!activeTabId) {
+            sendResponse({
+              success: false,
+              error: "No active tab available",
+            });
             break;
           }
 
+          // ✨ STRATEGY 1: Try content script first (for supported sites)
           try {
-            // ✨ STRATEGY 1: Try content script first (best for Gmail, Docs, etc.)
-            debug("Trying content script extraction...");
             const response = await chrome.tabs.sendMessage(activeTabId, {
               action: "EXTRACT_CONTENT",
+              options: request.options || {},
             });
-            debug("Content script extraction succeeded!");
+
+            debug("Content script extraction succeeded");
             sendResponse(response);
           } catch (error) {
             debug("Content script not available, using emergency injection");

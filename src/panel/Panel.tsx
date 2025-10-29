@@ -22,7 +22,6 @@ function Panel() {
     showLoginOverlay,
     authCheckCount,
     openLoginPage,
-    recheckAuth,
     forceShowLogin,
   } = useAuth();
 
@@ -69,7 +68,6 @@ function Panel() {
         isVisible={showLoginOverlay && !isLoading}
         detectedDomain={domain}
         onLogin={handleLogin}
-        onCheckAuth={recheckAuth}
         error={error}
       />
 

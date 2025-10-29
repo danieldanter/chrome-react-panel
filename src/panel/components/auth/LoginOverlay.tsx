@@ -1,5 +1,6 @@
 // src/panel/components/auth/LoginOverlay.tsx
-// Full-screen login overlay with blur effect
+// ✅ IMPROVED: Simplified - no manual "check auth" button needed!
+// Login is detected automatically via cookie monitoring
 
 import { useState, type KeyboardEvent } from "react";
 
@@ -7,7 +8,6 @@ interface LoginOverlayProps {
   isVisible: boolean;
   detectedDomain: string | null;
   onLogin: (domain?: string) => void;
-  onCheckAuth: () => Promise<boolean>;
   error?: string | null;
 }
 
@@ -15,12 +15,9 @@ function LoginOverlay({
   isVisible,
   detectedDomain,
   onLogin,
-  onCheckAuth,
   error,
 }: LoginOverlayProps) {
   const [manualDomain, setManualDomain] = useState("");
-  const [showCheckButton, setShowCheckButton] = useState(false);
-  const [isChecking, setIsChecking] = useState(false);
 
   if (!isVisible) return null;
 
@@ -43,25 +40,8 @@ function LoginOverlay({
       return;
     }
 
-    // Open login page
+    // Open login page (auto-detection will handle the rest!)
     onLogin(finalDomain);
-
-    // Show check button
-    setShowCheckButton(true);
-  };
-
-  /**
-   * Handle check auth button click
-   */
-  const handleCheckAuth = async () => {
-    setIsChecking(true);
-    const success = await onCheckAuth();
-    setIsChecking(false);
-
-    if (!success) {
-      // Keep check button visible if auth failed
-      setShowCheckButton(true);
-    }
   };
 
   /**
@@ -130,37 +110,27 @@ function LoginOverlay({
           </div>
         )}
 
-        {/* Login Button (primary action) */}
-        {!showCheckButton ? (
-          <button className="btn-login" onClick={handleLogin}>
-            Bei CompanyGPT anmelden
-          </button>
-        ) : (
-          <>
-            {/* Check Auth Button (shown AFTER login attempt) */}
-            <button
-              className="btn-check-auth"
-              onClick={handleCheckAuth}
-              disabled={isChecking}
-            >
-              {isChecking ? "Prüfe..." : "Anmeldung prüfen"}
-            </button>
+        {/* Login Button (single button - auto-detection handles the rest!) */}
+        <button className="btn-login" onClick={handleLogin}>
+          Bei CompanyGPT anmelden
+        </button>
 
-            {/* Login Hint (shown after login button clicked) */}
-            <div className="login-hint">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <circle cx="12" cy="12" r="10" opacity="0.3" />
-                <path d="M12 7v5l3 3" />
-              </svg>
-              <span>Anmeldung läuft im neuen Tab...</span>
-            </div>
-          </>
-        )}
+        {/* ✅ NEW: Auto-detection hint */}
+        <div className="login-hint" style={{ marginTop: "16px" }}>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            style={{ marginRight: "8px" }}
+          >
+            <circle cx="12" cy="12" r="10" opacity="0.3" />
+            <path d="M12 7v5l3 3" />
+          </svg>
+          <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+            Nach der Anmeldung wird der Chat automatisch aktiviert
+          </span>
+        </div>
       </div>
     </div>
   );
