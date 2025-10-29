@@ -1,5 +1,5 @@
 // src/panel/components/chat/ChatContainer.tsx
-// Main chat container with new InputArea component
+// Main chat container with streaming support
 
 import { useEffect } from "react";
 import { useChat } from "../../hooks/useChat";
@@ -8,7 +8,14 @@ import MessageList from "./MessageList";
 import InputArea from "../input/InputArea";
 
 function ChatContainer() {
-  const { messages, loading, sendMessage, initialize } = useChat();
+  const {
+    messages,
+    loading,
+    streamingContent,
+    sendMessage,
+    handleStreamingComplete,
+    initialize,
+  } = useChat();
   const { context, loadContext, clearContext } = useContext();
 
   // Initialize chat on mount
@@ -43,10 +50,18 @@ function ChatContainer() {
       <div
         style={{
           flex: 1,
+          minHeight: 0, // ✅ Critical for nested flex scrolling
           overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        <MessageList messages={messages} loading={loading} />
+        <MessageList
+          messages={messages}
+          loading={loading}
+          streamingContent={streamingContent}
+          onStreamingComplete={handleStreamingComplete}
+        />
       </div>
 
       {/* Input Area (new component) */}
@@ -55,7 +70,7 @@ function ChatContainer() {
         onClearContext={clearContext}
         onLoadContext={loadContext}
         onSend={handleSendMessage}
-        disabled={loading}
+        disabled={loading || streamingContent !== null}
       />
     </div>
   );

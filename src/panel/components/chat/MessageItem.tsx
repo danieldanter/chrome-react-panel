@@ -1,23 +1,26 @@
 // src/panel/components/chat/MessageItem.tsx
-// Single message display with correct vanilla styling
+// Single message display with markdown rendering for assistant messages
 
 import type { Message } from "../../types";
+import { useMarkdownRenderer } from "../../hooks/useMarkdownRenderer";
 
 interface MessageItemProps {
   message: Message;
 }
 
 function MessageItem({ message }: MessageItemProps) {
+  const { renderMarkdown } = useMarkdownRenderer();
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
+  const isAssistant = message.role === "assistant";
 
   return (
     <div
-      className="message"
+      className={`message ${message.role}`}
       style={{
         maxWidth: "85%",
         padding: "12px 14px",
-        borderRadius: "var(--r-2xl)", // ✅ Now correctly 14px
+        borderRadius: "var(--r-2xl)",
         fontSize: "14px",
         lineHeight: "1.5",
         wordWrap: "break-word",
@@ -44,9 +47,19 @@ function MessageItem({ message }: MessageItemProps) {
         color: "var(--text-primary)",
       }}
     >
-      <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-        {message.content}
-      </div>
+      {isAssistant ? (
+        // ✅ Render markdown for assistant messages
+        <div
+          dangerouslySetInnerHTML={{
+            __html: renderMarkdown(message.content),
+          }}
+        />
+      ) : (
+        // ✅ Plain text for user/system messages
+        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+          {message.content}
+        </div>
+      )}
     </div>
   );
 }

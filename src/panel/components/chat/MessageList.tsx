@@ -1,39 +1,74 @@
 // src/panel/components/chat/MessageList.tsx
-// Displays list of messages with proper flex layout matching vanilla version
+// Displays list of messages with proper flex layout and auto-scroll
 
 import { useEffect, useRef } from "react";
 import type { Message } from "../../types";
 import MessageItem from "./MessageItem";
+import StreamingMessage from "./StreamingMessage";
 
 interface MessageListProps {
   messages: Message[];
   loading: boolean;
+  streamingContent?: string | null;
+  onStreamingComplete?: () => void;
 }
 
-function MessageList({ messages, loading }: MessageListProps) {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+function MessageList({
+  messages,
+  loading,
+  streamingContent,
+  onStreamingComplete,
+}: MessageListProps) {
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom
+  /**
+   * Auto-scroll to bottom (matching vanilla version)
+   */
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      requestAnimationFrame(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop =
+            chatContainerRef.current.scrollHeight;
+        }
+      });
+    }
   };
 
+  // Auto-scroll when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
+  // Auto-scroll during streaming
+  useEffect(() => {
+    if (streamingContent) {
+      scrollToBottom();
+    }
+  }, [streamingContent]);
+
+  // Continuous scroll while streaming is active
+  useEffect(() => {
+    if (streamingContent) {
+      const interval = setInterval(scrollToBottom, 100);
+      return () => clearInterval(interval);
+    }
+  }, [streamingContent]);
+
   return (
     <div
+      ref={chatContainerRef}
       className="chat-container"
       style={{
         flex: 1,
+        minHeight: 0, // ✅ Alternative to height: 0 - allows flex shrinking
         overflowY: "auto",
         overflowX: "hidden",
         padding: "12px",
-        background: "var(--white)", // ✅ Pure white background
+        background: "var(--white)",
       }}
     >
-      {messages.length === 0 ? (
+      {messages.length === 0 && !loading && !streamingContent ? (
         // ✅ Welcome message styled exactly like assistant message
         <div
           className="message assistant"
@@ -57,7 +92,7 @@ function MessageList({ messages, loading }: MessageListProps) {
           className="messages"
           style={{
             display: "flex",
-            flexDirection: "column", // ✅ CRITICAL: Column layout
+            flexDirection: "column",
             maxWidth: "100%",
           }}
         >
@@ -65,21 +100,22 @@ function MessageList({ messages, loading }: MessageListProps) {
             <div
               key={message.id}
               style={{
-                marginTop: index > 0 ? "12px" : "0", // ✅ Spacing between messages
+                marginTop: index > 0 ? "12px" : "0",
               }}
             >
               <MessageItem message={message} />
             </div>
           ))}
 
-          {loading && (
+          {/* Loading indicator (thinking dots) */}
+          {loading && !streamingContent && (
             <div
               className="thinking-indicator"
               style={{
                 display: "flex",
                 alignItems: "center",
                 padding: "12px 14px",
-                marginTop: "12px",
+                marginTop: messages.length > 0 ? "12px" : "0",
                 background: "var(--tint-gray-100)",
                 border: "1px solid var(--border)",
                 borderRadius: "var(--r-2xl)",
@@ -124,13 +160,22 @@ function MessageList({ messages, loading }: MessageListProps) {
                     fontStyle: "italic",
                   }}
                 >
-                  Antwortet...
+                  Denkt nach...
                 </span>
               </div>
             </div>
           )}
 
-          <div ref={messagesEndRef} />
+          {/* Streaming message */}
+          {streamingContent && (
+            <div style={{ marginTop: messages.length > 0 ? "12px" : "0" }}>
+              <StreamingMessage
+                content={streamingContent}
+                speed={3}
+                onComplete={onStreamingComplete}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

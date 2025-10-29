@@ -1,5 +1,5 @@
 // src/panel/hooks/useChat.ts
-// Custom hook for chat functionality with context integration
+// Custom hook for chat functionality with context integration and streaming
 
 import { useState, useCallback } from "react";
 import { sendChatMessage, fetchFolders, fetchRoles } from "../services/api";
@@ -9,6 +9,7 @@ import type { ContextState } from "../types/context";
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [folderId, setFolderId] = useState<string>("");
   const [roleId, setRoleId] = useState<string>("");
@@ -83,6 +84,24 @@ Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext vo
     },
     []
   );
+
+  /**
+   * Handle streaming complete - add message to history
+   */
+  const handleStreamingComplete = useCallback(() => {
+    if (streamingContent) {
+      const assistantMessage: Message = {
+        id: `msg-${Date.now()}`,
+        role: "assistant",
+        content: streamingContent,
+        timestamp: Date.now(),
+        references: [],
+        sources: [],
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+      setStreamingContent(null);
+    }
+  }, [streamingContent]);
 
   /**
    * Send a message (with optional context)
@@ -190,22 +209,14 @@ Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext vo
           assistantContent = JSON.stringify(response);
         }
 
-        // Create assistant message
-        const assistantMessage: Message = {
-          id: `msg-${Date.now()}`,
-          role: "assistant",
-          content: assistantContent,
-          timestamp: Date.now(),
-          references: [],
-          sources: [],
-        };
+        // Hide thinking indicator
+        setLoading(false);
 
-        // Add assistant message
-        setMessages((prev) => [...prev, assistantMessage]);
+        // Start streaming the response
+        setStreamingContent(assistantContent);
       } catch (err) {
         console.error("[useChat] Send failed:", err);
         setError((err as Error).message);
-      } finally {
         setLoading(false);
       }
     },
@@ -215,16 +226,19 @@ Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext vo
   // Clear messages
   const clearMessages = useCallback(() => {
     setMessages([]);
+    setStreamingContent(null);
     setError(null);
   }, []);
 
   return {
     messages,
     loading,
+    streamingContent,
     error,
     sendMessage,
     clearMessages,
     initialize,
+    handleStreamingComplete,
     folderId,
     roleId,
     model,
