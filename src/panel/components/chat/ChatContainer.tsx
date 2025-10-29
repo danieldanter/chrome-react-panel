@@ -1,15 +1,18 @@
 // src/panel/components/chat/ChatContainer.tsx
-// Main chat container component
+// Main chat container with context extraction
 
 import { useEffect } from "react";
 import { useChat } from "../../hooks/useChat";
+import { useContext } from "../../hooks/useContext";
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
+import ContextBar from "../context/ContextBar";
 
 function ChatContainer() {
   const { messages, loading, sendMessage, initialize } = useChat();
+  const { context, loadContext, clearContext, hasContext } = useContext();
 
-  // Initialize on mount
+  // Initialize chat on mount
   useEffect(() => {
     initialize();
   }, [initialize]);
@@ -21,9 +24,22 @@ function ChatContainer() {
         <MessageList messages={messages} loading={loading} />
       </div>
 
+      {/* Context Bar (appears above input when context is loaded) */}
+      {hasContext && (
+        <div className="px-4 pb-2">
+          <ContextBar context={context} onClear={clearContext} />
+        </div>
+      )}
+
       {/* Input Area */}
       <div className="shrink-0">
-        <MessageInput onSend={sendMessage} disabled={loading} />
+        <MessageInput
+          onSend={sendMessage}
+          disabled={loading}
+          onLoadContext={loadContext}
+          contextLoading={context.isLoading}
+          contextLoaded={context.isLoaded}
+        />
       </div>
     </div>
   );

@@ -207,3 +207,63 @@ body {
 .spin {
   animation: spin 1s linear infinite;
 }
+
+/* Add this to src/panel/App.css or src/index.css */
+
+/* Context Bar Animation */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* CSS Variables (if not already defined) */
+:root {
+  --r-xs: 4px;
+  --r-s: 6px;
+  --r-m: 8px;
+  --r-l: 10px;
+  --r-xl: 12px;
+  --r-2xl: 14px;
+
+  --danger: #ef4444;
+  --success: #22c55e;
+  --blue-500: #0ea5e9;
+  --blue-600: #0284c7;
+
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --border: #e5e7eb;
+
+  --tint-gray-50: #f9fafb;
+  --tint-gray-100: #f3f4f6;
+
+  --white: #ffffff;
+}
+
+/* Dark mode variables (optional) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text-primary: #f9fafb;
+    --text-secondary: #d1d5db;
+    --text-muted: #6b7280;
+
+    --bg-primary: #1f2937;
+    --bg-secondary: #374151;
+    --border: #4b5563;
+
+    --tint-gray-50: #374151;
+    --tint-gray-100: #4b5563;
+
+    --white: #1f2937;
+  }
+}

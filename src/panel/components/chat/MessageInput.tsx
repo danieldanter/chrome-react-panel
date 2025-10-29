@@ -1,15 +1,26 @@
 // src/panel/components/chat/MessageInput.tsx
-// Message input area
+// Message input area with context button
 
 import { useState } from "react";
 import type { KeyboardEvent } from "react";
+import LoadContextButton from "../context/LoadContextButton";
 
 interface MessageInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  // Context props
+  onLoadContext?: () => void;
+  contextLoading?: boolean;
+  contextLoaded?: boolean;
 }
 
-function MessageInput({ onSend, disabled }: MessageInputProps) {
+function MessageInput({
+  onSend,
+  disabled,
+  onLoadContext,
+  contextLoading = false,
+  contextLoaded = false,
+}: MessageInputProps) {
   const [input, setInput] = useState("");
 
   const handleSend = () => {
@@ -33,6 +44,19 @@ function MessageInput({ onSend, disabled }: MessageInputProps) {
         background: "var(--bg-primary)",
       }}
     >
+      {/* Input Row with Load Context Button */}
+      <div className="flex gap-2 items-start mb-2">
+        {/* Load Context Button (bottom left) */}
+        {onLoadContext && (
+          <LoadContextButton
+            onClick={onLoadContext}
+            loading={contextLoading}
+            loaded={contextLoaded}
+          />
+        )}
+      </div>
+
+      {/* Text Area and Send Button Row */}
       <div className="flex gap-2 items-end">
         <textarea
           value={input}
