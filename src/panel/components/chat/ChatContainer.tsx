@@ -1,46 +1,62 @@
 // src/panel/components/chat/ChatContainer.tsx
-// Main chat container with context extraction
+// Main chat container with new InputArea component
 
 import { useEffect } from "react";
 import { useChat } from "../../hooks/useChat";
 import { useContext } from "../../hooks/useContext";
 import MessageList from "./MessageList";
-import MessageInput from "./MessageInput";
-import ContextBar from "../context/ContextBar";
+import InputArea from "../input/InputArea";
 
 function ChatContainer() {
   const { messages, loading, sendMessage, initialize } = useChat();
-  const { context, loadContext, clearContext, hasContext } = useContext();
+  const { context, loadContext, clearContext } = useContext();
 
   // Initialize chat on mount
   useEffect(() => {
     initialize();
   }, [initialize]);
 
+  /**
+   * Handle sending message with context
+   */
+  const handleSendMessage = (content: string) => {
+    console.log("[ChatContainer] Sending message with context:", {
+      hasContext: context.isLoaded,
+      contextLoaded: context.isLoaded,
+      contextLength: context.content?.length || 0,
+    });
+
+    // Pass context to sendMessage if it's loaded
+    sendMessage(content, context.isLoaded ? context : null);
+  };
+
   return (
-    <div className="flex flex-col h-full">
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
       {/* Messages Area */}
-      <div className="flex-1 overflow-hidden">
+      <div
+        style={{
+          flex: 1,
+          overflow: "hidden",
+        }}
+      >
         <MessageList messages={messages} loading={loading} />
       </div>
 
-      {/* Context Bar (appears above input when context is loaded) */}
-      {hasContext && (
-        <div className="px-4 pb-2">
-          <ContextBar context={context} onClear={clearContext} />
-        </div>
-      )}
-
-      {/* Input Area */}
-      <div className="shrink-0">
-        <MessageInput
-          onSend={sendMessage}
-          disabled={loading}
-          onLoadContext={loadContext}
-          contextLoading={context.isLoading}
-          contextLoaded={context.isLoaded}
-        />
-      </div>
+      {/* Input Area (new component) */}
+      <InputArea
+        context={context}
+        onClearContext={clearContext}
+        onLoadContext={loadContext}
+        onSend={handleSendMessage}
+        disabled={loading}
+      />
     </div>
   );
 }

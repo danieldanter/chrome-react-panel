@@ -1,9 +1,10 @@
 // src/panel/hooks/useChat.ts
-// Custom hook for chat functionality
+// Custom hook for chat functionality with context integration
 
 import { useState, useCallback } from "react";
 import { sendChatMessage, fetchFolders, fetchRoles } from "../services/api";
 import type { Message, ChatPayload } from "../types";
+import type { ContextState } from "../types/context";
 
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -49,10 +50,47 @@ export function useChat() {
     }
   }, []);
 
-  // Send a message
+  /**
+   * Build structured prompt with context
+   */
+  const buildMessageWithContext = useCallback(
+    (userMessage: string, context: ContextState | null): string => {
+      // If no context is loaded, return the message as-is
+      if (!context || !context.isLoaded || !context.content) {
+        return userMessage;
+      }
+
+      console.log("[useChat] Building message with context");
+
+      // Build structured prompt with ### headers
+      const structuredPrompt = `### Kontext von der Webseite ###
+Titel: ${context.title}
+URL: ${context.url}
+Domain: ${context.domain}
+${context.selectedText ? `\nMarkierter Text:\n${context.selectedText}\n` : ""}
+Seiteninhalt:
+"""
+${context.content}
+"""
+
+### Benutzerfrage ###
+${userMessage}
+
+### Antwort ###
+Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext von der Webseite. Gib eine klare, präzise Antwort.`;
+
+      return structuredPrompt;
+    },
+    []
+  );
+
+  /**
+   * Send a message (with optional context)
+   */
   const sendMessage = useCallback(
     async (
       content: string,
+      pageContext?: ContextState | null,
       useDataCollection: boolean = false,
       dataCollectionId?: string
     ) => {
@@ -60,17 +98,33 @@ export function useChat() {
 
       console.log("[useChat] Sending message:", content);
 
-      // Create user message
+      // Build the final message content (with context if available)
+      const finalContent = buildMessageWithContext(
+        content,
+        pageContext || null
+      );
+
+      console.log(
+        "[useChat] Context included:",
+        pageContext?.isLoaded ? "YES ✅" : "NO"
+      );
+      console.log(
+        "[useChat] Final message length:",
+        finalContent.length,
+        "chars"
+      );
+
+      // Create user message (store original user message for display)
       const userMessage: Message = {
         id: `msg-${Date.now()}`,
         role: "user",
-        content,
+        content, // Display the user's original question
         timestamp: Date.now(),
         references: [],
         sources: [],
       };
 
-      // Add user message to state ONCE
+      // Add user message to state
       setMessages((prev) => [...prev, userMessage]);
       setLoading(true);
       setError(null);
@@ -92,7 +146,7 @@ export function useChat() {
             })),
             {
               role: "user",
-              content,
+              content: finalContent, // ✨ Send the structured prompt with context!
               references: [],
               sources: [],
             },
@@ -104,7 +158,7 @@ export function useChat() {
           selectedDataCollections:
             useDataCollection && dataCollectionId ? [dataCollectionId] : [],
           selectedFiles: [],
-          selectedMode, // "BASIC" or "QA"
+          selectedMode,
           temperature: 0.2,
         };
 
@@ -146,7 +200,7 @@ export function useChat() {
           sources: [],
         };
 
-        // 🔧 FIX: Only add assistant message (user message already added above)
+        // Add assistant message
         setMessages((prev) => [...prev, assistantMessage]);
       } catch (err) {
         console.error("[useChat] Send failed:", err);
@@ -155,7 +209,7 @@ export function useChat() {
         setLoading(false);
       }
     },
-    [loading, messages, folderId, model, roleId]
+    [loading, messages, folderId, model, roleId, buildMessageWithContext]
   );
 
   // Clear messages

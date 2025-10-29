@@ -1,15 +1,22 @@
-/* src/index.css - Complete CSS Variables matching vanilla version */
-
-@import "tailwindcss";
+/* src/index.css - Main styles with design tokens */
+/* =========================
+   Tailwind Base (Keep existing)
+   ========================= */
+@import "tailwindcss/preflight";
+@import "tailwindcss/utilities";
+/* =========================
+   Design Tokens
+   ========================= */
+/* src/index.css - Main styles with design tokens */
 
 /* =========================
-   Design Tokens (506 Style)
+   Design Tokens
    ========================= */
 :root {
   /* Core surfaces */
   --white: #ffffff;
-  --bg-primary: #ffffff;
-  --bg-secondary: #ffffff;
+  --bg-primary: var(--white);
+  --bg-secondary: var(--white);
   --hover-bg: rgba(0, 0, 0, 0.05);
 
   /* Text */
@@ -38,32 +45,26 @@
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.15);
 
-  /* Overlays */
-  --overlay-light: rgba(255, 255, 255, 0.95);
-  --overlay-dark: rgba(15, 17, 20, 0.95);
-
-  /* Border Radius - CORRECTED VALUES */
+  /* Radii */
   --r-xxs: 3px;
   --r-xs: 4px;
   --r-s: 6px;
   --r-m: 8px;
   --r-l: 10px;
   --r-xl: 12px;
-  --r-2xl: 14px; /* ✅ FIXED: Was 20px, should be 14px for messages */
-  --r-3xl: 20px; /* ✅ FIXED: Added this for input */
+  --r-2xl: 14px;
+  --r-3xl: 20px;
 }
 
-/* Dark mode */
+/* Dark Mode */
 @media (prefers-color-scheme: dark) {
   :root {
-    --white: #1a1b1e;
     --bg-primary: #0f1114;
     --bg-secondary: #0f1114;
     --text-primary: #e5e7eb;
     --text-secondary: #ababab;
     --text-muted: #6b6b6b;
     --border: #23262b;
-    --hover-bg: rgba(255, 255, 255, 0.05);
     --tint-gray-100: #101418;
   }
 }
@@ -81,16 +82,13 @@ html,
 body {
   height: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.5;
 }
 
 #root {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+  height: 100%;
 }
 
 /* =========================
@@ -99,7 +97,7 @@ body {
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -107,26 +105,14 @@ body {
   }
 }
 
-@keyframes fadeInUp {
+@keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes thinkingPulse {
-  0%,
-  100% {
-    opacity: 0.3;
-    transform: scale(0.8);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.2);
   }
 }
 
@@ -139,45 +125,36 @@ body {
   }
 }
 
-@keyframes blink {
+@keyframes pulse {
   0%,
-  50%,
   100% {
+    transform: scale(1);
     opacity: 1;
   }
-  25%,
-  75% {
-    opacity: 0;
+  50% {
+    transform: scale(1.02);
+    opacity: 0.8;
   }
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(100px);
+@keyframes contextPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.4);
   }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes checkIn {
-  from {
-    transform: scale(0) rotate(-180deg);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1) rotate(0deg);
-    opacity: 1;
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 8px rgba(14, 165, 233, 0);
   }
 }
 
 /* =========================
-   Scrollbar Styling
+   Scrollbars
    ========================= */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -196,74 +173,53 @@ body {
 /* =========================
    Utility Classes
    ========================= */
-.fade-in {
-  animation: fadeIn 0.3s ease;
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--r-s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
 }
 
-.fade-in-up {
-  animation: fadeInUp 0.3s ease;
+.icon-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
 }
 
-.spin {
-  animation: spin 1s linear infinite;
+.icon-btn.active {
+  color: var(--blue-600);
+  background: rgba(14, 165, 233, 0.08);
 }
 
-/* Add this to src/panel/App.css or src/index.css */
-
-/* Context Bar Animation */
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.icon-btn.danger:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
 }
 
-/* CSS Variables (if not already defined) */
-:root {
-  --r-xs: 4px;
-  --r-s: 6px;
-  --r-m: 8px;
-  --r-l: 10px;
-  --r-xl: 12px;
-  --r-2xl: 14px;
-
-  --danger: #ef4444;
-  --success: #22c55e;
-  --blue-500: #0ea5e9;
-  --blue-600: #0284c7;
-
-  --text-primary: #1f2937;
-  --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
-
-  --bg-primary: #ffffff;
-  --bg-secondary: #f9fafb;
-  --border: #e5e7eb;
-
-  --tint-gray-50: #f9fafb;
-  --tint-gray-100: #f3f4f6;
-
-  --white: #ffffff;
+/* =========================
+   Placeholder Styles
+   ========================= */
+::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
-/* Dark mode variables (optional) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text-primary: #f9fafb;
-    --text-secondary: #d1d5db;
-    --text-muted: #6b7280;
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
 
-    --bg-primary: #1f2937;
-    --bg-secondary: #374151;
-    --border: #4b5563;
-
-    --tint-gray-50: #374151;
-    --tint-gray-100: #4b5563;
-
-    --white: #1f2937;
+/* =========================
+   Mobile Adjustments
+   ========================= */
+@media (max-width: 400px) {
+  textarea {
+    font-size: 16px; /* Prevent zoom on iOS */
   }
 }

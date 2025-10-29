@@ -22,27 +22,11 @@ export interface ContextState {
   emailProvider: "gmail" | "outlook" | null;
   isGoogleDocs: boolean;
 
-  // Metadata
+  // Metadata (used by useContext hook)
   timestamp: number;
   extractionMethod: string;
   metadata: Record<string, unknown>;
 }
 
-export interface ContextBarProps {
-  context: ContextState;
-  onClear: () => void;
-}
-
-export interface LoadContextButtonProps {
-  onClick: () => void;
-  loading: boolean;
-  loaded: boolean;
-}
-
-export interface ContextActionsProps {
-  visible: boolean;
-  isEmail: boolean;
-  isDocument: boolean;
-  onAction: (action: string) => void;
-  loading: boolean;
-}
+// Note: Component prop interfaces are defined inline in the new components
+// (ContextBarProps, MessageInputProps, etc.) so we don't need separate exports

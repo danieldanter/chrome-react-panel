@@ -1,5 +1,5 @@
 // background.js
-// Background Service Worker with CORS bypass
+// Background Service Worker with CORS bypass + Emergency Content Extraction
 
 console.log("[Background] Service worker started");
 
@@ -25,6 +25,67 @@ let activeTabId = null;
 const debug = (...args) => {
   if (DEBUG) console.log("[Background]", ...args);
 };
+
+// ============================================
+// EMERGENCY CONTENT EXTRACTION (Injected function)
+// ============================================
+
+/**
+ * This function runs in the page context when content script isn't available
+ * It's injected via chrome.scripting.executeScript
+ */
+function emergencyExtraction() {
+  try {
+    console.log("[Emergency Extraction] Starting...");
+
+    // Get selected text if any
+    const selection = window.getSelection();
+    const selectedText = selection ? selection.toString().trim() : "";
+
+    // Find main content area using common selectors
+    const contentElement =
+      document.querySelector("main") ||
+      document.querySelector('[role="main"]') ||
+      document.querySelector("article") ||
+      document.querySelector(".content") ||
+      document.querySelector("#content") ||
+      document.querySelector(".post-content") ||
+      document.querySelector(".article-content") ||
+      document.body;
+
+    // Extract text content
+    let content = "";
+    if (contentElement) {
+      content = contentElement.innerText || contentElement.textContent || "";
+    }
+
+    // Clean and truncate content (respect token limits)
+    content = content.trim().replace(/\s+/g, " ").substring(0, 50000); // ~10k tokens
+
+    console.log("[Emergency Extraction] Extracted:", content.length, "chars");
+
+    return {
+      success: true,
+      title: document.title || "Untitled Page",
+      url: window.location.href,
+      content: content,
+      selectedText: selectedText,
+      siteType: "web",
+      metadata: {
+        extractionMethod: "emergency-injection",
+        hostname: window.location.hostname,
+      },
+    };
+  } catch (error) {
+    console.error("[Emergency Extraction] Failed:", error);
+    return {
+      success: false,
+      error: error.message || "Emergency extraction failed",
+      title: document.title || "Error",
+      url: window.location.href,
+    };
+  }
+}
 
 // ============================================
 // DOMAIN DETECTION
@@ -246,16 +307,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           }
 
           try {
+            // ✨ STRATEGY 1: Try content script first (best for Gmail, Docs, etc.)
+            debug("Trying content script extraction...");
             const response = await chrome.tabs.sendMessage(activeTabId, {
               action: "EXTRACT_CONTENT",
             });
+            debug("Content script extraction succeeded!");
             sendResponse(response);
           } catch (error) {
-            debug("Content script not available:", error);
-            sendResponse({
-              success: false,
-              error: "Content script not loaded",
-            });
+            debug("Content script not available, using emergency injection");
+
+            // ✨ STRATEGY 2: Emergency injection fallback (works on ANY page!)
+            try {
+              const results = await chrome.scripting.executeScript({
+                target: { tabId: activeTabId },
+                func: emergencyExtraction,
+              });
+
+              if (results && results[0] && results[0].result) {
+                debug("Emergency extraction succeeded!");
+                sendResponse(results[0].result);
+              } else {
+                sendResponse({
+                  success: false,
+                  error: "Emergency extraction returned no data",
+                });
+              }
+            } catch (injectError) {
+              debug("Emergency injection failed:", injectError);
+              sendResponse({
+                success: false,
+                error: "Could not extract content from this page",
+              });
+            }
           }
           break;
         }
