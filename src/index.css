@@ -449,3 +449,215 @@ textarea::placeholder {
     font-size: 16px; /* Prevent zoom on iOS */
   }
 }
+
+/* =========================
+   Login Overlay Styles
+   Add these to your existing src/index.css file
+   ========================= */
+
+/* Login Overlay */
+.login-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.3s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .login-overlay {
+    background: rgba(15, 17, 20, 0.9);
+  }
+}
+
+/* Login Card (centered white card) */
+.login-card {
+  text-align: center;
+  padding: 32px;
+  max-width: 320px;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Icon at top */
+.login-icon {
+  color: var(--blue-500);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Heading and text */
+.login-card h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.login-card p {
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Domain Status (auto-detected) */
+.domain-status {
+  margin: 12px 0;
+  padding: 8px 12px;
+  background: rgba(14, 165, 233, 0.1);
+  border-radius: var(--r-s);
+  font-size: 12px;
+  color: var(--blue-600);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+/* Domain Input Group (manual entry) */
+.domain-input-group {
+  margin: 16px 0;
+  text-align: left;
+}
+
+.domain-input-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.input-with-suffix {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-s);
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: var(--bg-primary);
+}
+
+.input-with-suffix:focus-within {
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.input-with-suffix input {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.input-with-suffix .suffix {
+  padding: 8px 12px;
+  background: var(--tint-gray-100);
+  color: var(--text-muted);
+  font-size: 14px;
+  border-left: 1px solid var(--border);
+}
+
+.help-text {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Login Buttons */
+.btn-login,
+.btn-check-auth {
+  width: 100%;
+  padding: 10px 20px;
+  border-radius: var(--r-m);
+  border: none;
+  background: var(--blue-600);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 16px;
+}
+
+.btn-login:hover:not(:disabled),
+.btn-check-auth:hover:not(:disabled) {
+  background: var(--blue-500);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+.btn-login:active:not(:disabled),
+.btn-check-auth:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Check Auth button (secondary style) */
+.btn-check-auth {
+  background: var(--tint-gray-100);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btn-check-auth:hover:not(:disabled) {
+  background: rgba(14, 165, 233, 0.08);
+  border-color: var(--blue-500);
+  color: var(--blue-600);
+}
+
+.btn-check-auth:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Login Error */
+.login-error {
+  margin: 12px 0;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--r-s);
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* Login Hint (shown during login) */
+.login-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.login-hint svg {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Blur messages behind overlay */
+.messages.blurred {
+  filter: blur(3px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Mobile adjustments for login */
+@media (max-width: 400px) {
+  .login-card {
+    padding: 24px;
+    max-width: 280px;
+  }
+
+  .login-card h2 {
+    font-size: 18px;
+  }
+}

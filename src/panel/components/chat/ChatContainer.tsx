@@ -1,5 +1,5 @@
 // src/panel/components/chat/ChatContainer.tsx
-// Main chat container with streaming support
+// Main chat container with authentication-aware behavior
 
 import { useEffect } from "react";
 import { useChat } from "../../hooks/useChat";
@@ -7,7 +7,15 @@ import { useContext } from "../../hooks/useContext";
 import MessageList from "./MessageList";
 import InputArea from "../input/InputArea";
 
-function ChatContainer() {
+interface ChatContainerProps {
+  isAuthenticated: boolean;
+  authCheckCount: number;
+}
+
+function ChatContainer({
+  isAuthenticated,
+  authCheckCount,
+}: ChatContainerProps) {
   const {
     messages,
     loading,
@@ -16,17 +24,33 @@ function ChatContainer() {
     handleStreamingComplete,
     initialize,
   } = useChat();
+
   const { context, loadContext, clearContext } = useContext();
 
-  // Initialize chat on mount
+  // Initialize chat on mount AND when auth changes
   useEffect(() => {
-    initialize();
-  }, [initialize]);
+    if (isAuthenticated) {
+      console.log(
+        "[ChatContainer] Initializing chat (auth:",
+        isAuthenticated,
+        "count:",
+        authCheckCount,
+        ")"
+      );
+      initialize();
+    }
+  }, [initialize, isAuthenticated, authCheckCount]);
 
   /**
    * Handle sending message with context
    */
   const handleSendMessage = (content: string) => {
+    // Don't allow sending if not authenticated
+    if (!isAuthenticated) {
+      console.warn("[ChatContainer] Cannot send message - not authenticated");
+      return;
+    }
+
     console.log("[ChatContainer] Sending message with context:", {
       hasContext: context.isLoaded,
       contextLoaded: context.isLoaded,
@@ -50,7 +74,7 @@ function ChatContainer() {
       <div
         style={{
           flex: 1,
-          minHeight: 0, // ✅ Critical for nested flex scrolling
+          minHeight: 0,
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -64,13 +88,13 @@ function ChatContainer() {
         />
       </div>
 
-      {/* Input Area (new component) */}
+      {/* Input Area - DISABLED when not authenticated */}
       <InputArea
         context={context}
         onClearContext={clearContext}
         onLoadContext={loadContext}
         onSend={handleSendMessage}
-        disabled={loading || streamingContent !== null}
+        disabled={!isAuthenticated || loading || streamingContent !== null}
       />
     </div>
   );

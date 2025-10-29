@@ -1,12 +1,13 @@
 // src/panel/hooks/useChat.ts
 // Custom hook for chat functionality with context integration and streaming
+// Now includes 401 error handling and optional login overlay trigger
 
 import { useState, useCallback } from "react";
 import { sendChatMessage, fetchFolders, fetchRoles } from "../services/api";
 import type { Message, ChatPayload } from "../types";
 import type { ContextState } from "../types/context";
 
-export function useChat() {
+export function useChat(forceShowLogin?: (reason: string) => void) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState<string | null>(null);
@@ -20,28 +21,53 @@ export function useChat() {
     tokenLimit: 980000,
   });
 
-  // Initialize folders and roles
+  /**
+   * Initialize folders and roles
+   * Now includes 401 handling
+   */
   const initialize = useCallback(async () => {
     try {
       console.log("[useChat] Initializing...");
 
       // Fetch folders
-      const folders = await fetchFolders();
-      const rootChatFolder = folders.find((f) => f.type === "ROOT_CHAT");
-      if (rootChatFolder) {
-        setFolderId(rootChatFolder.id);
-        console.log("[useChat] Folder ID set:", rootChatFolder.id);
+      try {
+        const folders = await fetchFolders();
+        const rootChatFolder = folders.find((f) => f.type === "ROOT_CHAT");
+        if (rootChatFolder) {
+          setFolderId(rootChatFolder.id);
+          console.log("[useChat] Folder ID set:", rootChatFolder.id);
+        }
+      } catch (err) {
+        const errorMessage = (err as Error).message || "";
+        if (errorMessage.includes("401")) {
+          console.log("[useChat] 401 on fetchFolders - triggering login");
+          if (forceShowLogin) {
+            forceShowLogin("Sitzung abgelaufen. Bitte erneut anmelden.");
+          }
+          return; // Stop initialization
+        }
       }
 
       // Fetch roles
-      const roles = await fetchRoles();
-      const defaultRole = roles.find((r) => r.defaultRole) || roles[0];
-      if (defaultRole) {
-        setRoleId(defaultRole.roleId || defaultRole.id);
-        console.log(
-          "[useChat] Role ID set:",
-          defaultRole.roleId || defaultRole.id
-        );
+      try {
+        const roles = await fetchRoles();
+        const defaultRole = roles.find((r) => r.defaultRole) || roles[0];
+        if (defaultRole) {
+          setRoleId(defaultRole.roleId || defaultRole.id);
+          console.log(
+            "[useChat] Role ID set:",
+            defaultRole.roleId || defaultRole.id
+          );
+        }
+      } catch (err) {
+        const errorMessage = (err as Error).message || "";
+        if (errorMessage.includes("401")) {
+          console.log("[useChat] 401 on fetchRoles - triggering login");
+          if (forceShowLogin) {
+            forceShowLogin("Sitzung abgelaufen. Bitte erneut anmelden.");
+          }
+          return; // Stop initialization
+        }
       }
 
       console.log("[useChat] Initialization complete");
@@ -49,21 +75,19 @@ export function useChat() {
       console.error("[useChat] Initialization failed:", err);
       setError("Failed to initialize chat");
     }
-  }, []);
+  }, [forceShowLogin]);
 
   /**
    * Build structured prompt with context
    */
   const buildMessageWithContext = useCallback(
     (userMessage: string, context: ContextState | null): string => {
-      // If no context is loaded, return the message as-is
       if (!context || !context.isLoaded || !context.content) {
         return userMessage;
       }
 
       console.log("[useChat] Building message with context");
 
-      // Build structured prompt with ### headers
       const structuredPrompt = `### Kontext von der Webseite ###
 Titel: ${context.title}
 URL: ${context.url}
@@ -105,6 +129,7 @@ Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext vo
 
   /**
    * Send a message (with optional context)
+   * Now includes 401 handling
    */
   const sendMessage = useCallback(
     async (
@@ -117,7 +142,6 @@ Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext vo
 
       console.log("[useChat] Sending message:", content);
 
-      // Build the final message content (with context if available)
       const finalContent = buildMessageWithContext(
         content,
         pageContext || null
@@ -133,26 +157,22 @@ Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext vo
         "chars"
       );
 
-      // Create user message (store original user message for display)
       const userMessage: Message = {
         id: `msg-${Date.now()}`,
         role: "user",
-        content, // Display the user's original question
+        content,
         timestamp: Date.now(),
         references: [],
         sources: [],
       };
 
-      // Add user message to state
       setMessages((prev) => [...prev, userMessage]);
       setLoading(true);
       setError(null);
 
       try {
-        // Determine selectedMode based on whether we're using data collection
         const selectedMode = useDataCollection ? "QA" : "BASIC";
 
-        // Build payload
         const payload: ChatPayload = {
           id: null,
           folderId,
@@ -165,7 +185,7 @@ Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext vo
             })),
             {
               role: "user",
-              content: finalContent, // ✨ Send the structured prompt with context!
+              content: finalContent,
               references: [],
               sources: [],
             },
@@ -183,11 +203,9 @@ Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext vo
 
         console.log("[useChat] Payload:", payload);
 
-        // Send to API
         const response = await sendChatMessage(payload);
         console.log("[useChat] Response:", response);
 
-        // Parse response
         let assistantContent = "";
 
         if (typeof response === "string") {
@@ -209,21 +227,43 @@ Beantworte die Frage des Benutzers basierend auf dem bereitgestellten Kontext vo
           assistantContent = JSON.stringify(response);
         }
 
-        // Hide thinking indicator
         setLoading(false);
-
-        // Start streaming the response
         setStreamingContent(assistantContent);
       } catch (err) {
         console.error("[useChat] Send failed:", err);
-        setError((err as Error).message);
+
+        const errorMessage = (err as Error).message || "";
+
+        // ✅ Handle 401 Unauthorized
+        if (errorMessage.includes("401") || errorMessage.includes("HTTP 401")) {
+          console.log("[useChat] 401 error detected - triggering login");
+
+          if (forceShowLogin) {
+            forceShowLogin("Sitzung abgelaufen. Bitte erneut anmelden.");
+          }
+
+          setError("Sitzung abgelaufen. Bitte erneut anmelden.");
+        } else {
+          setError(errorMessage);
+        }
+
         setLoading(false);
       }
     },
-    [loading, messages, folderId, model, roleId, buildMessageWithContext]
+    [
+      loading,
+      messages,
+      folderId,
+      model,
+      roleId,
+      buildMessageWithContext,
+      forceShowLogin,
+    ]
   );
 
-  // Clear messages
+  /**
+   * Clear chat messages
+   */
   const clearMessages = useCallback(() => {
     setMessages([]);
     setStreamingContent(null);
