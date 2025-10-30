@@ -1,5 +1,5 @@
 // src/panel/hooks/useAuth.ts
-// ✅ OPTIMIZED: Ultra-fast login detection (0.5-1s) with no flickering
+// ✅ INSTANT LOGIN DETECTION: Hides login overlay immediately, shows loading state
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { checkAuth, getDomain } from "../services/api";
@@ -8,6 +8,7 @@ import { setStorage } from "../services/chrome";
 interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
+  isInitializing: boolean; // ✅ NEW: Separate state for post-login initialization
   domain: string | null;
   error: string | null;
 }
@@ -16,6 +17,7 @@ export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
     isLoading: true,
+    isInitializing: false, // ✅ NEW
     domain: null,
     error: null,
   });
@@ -39,9 +41,9 @@ export function useAuth() {
         return authState.isAuthenticated;
       }
 
-      // ✅ Lighter debouncing: 500ms instead of 1000ms
+      // ✅ Lighter debouncing: 300ms
       const now = Date.now();
-      if (!skipDebounce && now - lastAuthCheck.current < 500) {
+      if (!skipDebounce && now - lastAuthCheck.current < 300) {
         return authState.isAuthenticated;
       }
 
@@ -65,14 +67,35 @@ export function useAuth() {
 
         const isAuth = authResult.isAuthenticated;
 
-        setAuthState({
-          isAuthenticated: isAuth,
-          isLoading: false,
-          domain,
-          error: null,
-        });
+        // ✅ If authentication detected, immediately hide login overlay
+        if (isAuth) {
+          console.log("[useAuth] 🎉 Authentication detected!");
+          setShowLoginOverlay(false);
 
-        setShowLoginOverlay(!isAuth);
+          // ✅ Show initializing state briefly
+          setAuthState({
+            isAuthenticated: true,
+            isLoading: false,
+            isInitializing: true, // ✅ NEW: Show "Loading chat..." instead of login
+            domain,
+            error: null,
+          });
+
+          // ✅ After a brief moment, clear initializing flag
+          // (ChatContainer's initialize() will complete in background)
+          setTimeout(() => {
+            setAuthState((prev) => ({ ...prev, isInitializing: false }));
+          }, 1500); // Show "Loading chat..." for 1.5s max
+        } else {
+          setAuthState({
+            isAuthenticated: false,
+            isLoading: false,
+            isInitializing: false,
+            domain,
+            error: null,
+          });
+          setShowLoginOverlay(true);
+        }
 
         return isAuth;
       } catch (error) {
@@ -80,6 +103,7 @@ export function useAuth() {
         setAuthState({
           isAuthenticated: false,
           isLoading: false,
+          isInitializing: false,
           domain: null,
           error: (error as Error).message,
         });
@@ -101,6 +125,7 @@ export function useAuth() {
     setAuthState((prev) => ({
       ...prev,
       isAuthenticated: false,
+      isInitializing: false,
       error: reason || "Sitzung abgelaufen. Bitte erneut anmelden.",
     }));
 
@@ -163,7 +188,7 @@ export function useAuth() {
   const recheckAuth = useCallback(async (): Promise<boolean> => {
     console.log("[useAuth] Rechecking authentication...");
 
-    const isAuthenticated = await checkAuthentication(false, true); // Not silent, skip debounce
+    const isAuthenticated = await checkAuthentication(false, true);
 
     if (isAuthenticated) {
       setShowLoginOverlay(false);
@@ -197,18 +222,18 @@ export function useAuth() {
    */
   useEffect(() => {
     console.log("[useAuth] Component mounted - checking initial auth");
-    checkAuthentication(false, true); // Not silent, skip debounce
+    checkAuthentication(false, true);
   }, [checkAuthentication]);
 
   /**
-   * ✅ OPTIMIZED: Ultra-fast cookie monitoring with multiple listeners
+   * ✅ INSTANT: Cookie monitoring with 50ms delay (ultra-fast!)
    */
   useEffect(() => {
     if (!showLoginOverlay) {
       return;
     }
 
-    console.log("[useAuth] 🍪 Starting FAST cookie monitoring");
+    console.log("[useAuth] 🍪 Starting cookie monitoring");
 
     const handleCookieChange = (
       changeInfo: chrome.cookies.CookieChangeInfo
@@ -218,18 +243,17 @@ export function useAuth() {
         changeInfo.cookie.domain.includes("506.ai") &&
         !changeInfo.removed
       ) {
-        console.log("[useAuth] ⚡ Cookie detected INSTANTLY! Checking auth...");
+        console.log("[useAuth] ⚡ Cookie detected! Verifying auth...");
 
-        // ✅ ULTRA FAST: Only 100ms delay (was 500ms)
+        // ✅ INSTANT: Only 50ms delay for ultra-fast response
         setTimeout(async () => {
-          const isAuth = await checkAuthentication(true, true); // Silent, skip debounce
+          const isAuth = await checkAuthentication(true, true);
 
           if (isAuth) {
-            console.log("[useAuth] 🎉 Login confirmed!");
-            setShowLoginOverlay(false);
+            console.log("[useAuth] 🎉 Login confirmed via cookie!");
             setAuthCheckCount((prev) => prev + 1);
           }
-        }, 100); // ← 100ms instead of 500ms!
+        }, 50); // ← 50ms for instant feedback!
       }
     };
 
@@ -242,24 +266,22 @@ export function useAuth() {
   }, [showLoginOverlay, checkAuthentication]);
 
   /**
-   * ✅ OPTIMIZED: Fast polling every 1 second (not 3)
+   * ✅ Fast polling every 1 second as backup
    */
   useEffect(() => {
     if (!showLoginOverlay) {
       return;
     }
 
-    console.log("[useAuth] ⚡ Starting FAST polling (every 1s)");
+    console.log("[useAuth] ⚡ Starting polling (1s intervals)");
 
-    // ✅ First check immediately (don't wait 1 second)
     const checkNow = async () => {
-      const isAuth = await checkAuthentication(true, true); // Silent, skip debounce
+      const isAuth = await checkAuthentication(true, true);
 
       if (isAuth) {
-        console.log("[useAuth] 🎉 Login detected!");
-        setShowLoginOverlay(false);
+        console.log("[useAuth] 🎉 Login detected via polling!");
         setAuthCheckCount((prev) => prev + 1);
-        return true; // Stop polling
+        return true;
       }
       return false;
     };
@@ -269,16 +291,16 @@ export function useAuth() {
 
     // Then poll every 1 second
     const intervalId = setInterval(async () => {
-      console.log("[useAuth] 🔍 Fast polling...");
+      console.log("[useAuth] 🔍 Polling...");
 
       const shouldStop = await checkNow();
       if (shouldStop) {
         clearInterval(intervalId);
       }
-    }, 1000); // ← 1 second instead of 3!
+    }, 1000);
 
     return () => {
-      console.log("[useAuth] ⏹️ Stopped fast polling");
+      console.log("[useAuth] ⏹️ Stopped polling");
       clearInterval(intervalId);
     };
   }, [showLoginOverlay, checkAuthentication]);
@@ -304,6 +326,7 @@ export function useAuth() {
   return {
     isAuthenticated: authState.isAuthenticated,
     isLoading: authState.isLoading,
+    isInitializing: authState.isInitializing, // ✅ NEW: Expose initializing state
     domain: authState.domain,
     error: authState.error,
     showLoginOverlay,

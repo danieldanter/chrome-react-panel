@@ -1,6 +1,6 @@
 // background.js
 // Background Service Worker with CORS bypass + Emergency Content Extraction
-// ✅ IMPROVED: Now properly validates authentication and broadcasts 401 errors
+// ✅ OPTIMIZED: Fast cookie-based authentication (no slow API validation!)
 
 console.log("[Background] Service worker started");
 
@@ -133,44 +133,8 @@ async function detectActiveDomain() {
 }
 
 // ============================================
-// ✅ IMPROVED: VALIDATE AUTHENTICATION WITH TEST API CALL
+// ✅ OPTIMIZED: SIMPLE COOKIE EXPIRATION CHECK
 // ============================================
-
-async function validateAuthWithAPI(domain) {
-  try {
-    debug(`Validating auth with API call to ${domain}.506.ai...`);
-
-    // Make a lightweight API call to verify the session is valid
-    const response = await fetch(`https://${domain}.506.ai/api/folders`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      credentials: "include",
-    });
-
-    debug(`Validation API response status: ${response.status}`);
-
-    // If we get 401, the session is invalid
-    if (response.status === 401) {
-      debug("❌ Session validation failed - 401 Unauthorized");
-      return false;
-    }
-
-    // Any other error (403, 500, etc.) - assume not authenticated
-    if (!response.ok) {
-      debug(`⚠️ Session validation uncertain - HTTP ${response.status}`);
-      return false;
-    }
-
-    debug("✅ Session validation successful");
-    return true;
-  } catch (error) {
-    console.error("Session validation error:", error);
-    return false; // On error, assume not authenticated
-  }
-}
 
 async function checkAuth(skipCache = false) {
   // Use cache if available and not expired
@@ -200,12 +164,13 @@ async function checkAuth(skipCache = false) {
 
     await chrome.storage.local.set({ lastKnownDomain: domainInfo.domain });
 
-    // Check if cookie exists
+    // Get the auth cookie
     const cookie = await chrome.cookies.get({
       url: `https://${domainInfo.domain}.506.ai`,
       name: COOKIE_NAME,
     });
 
+    // No cookie = not authenticated
     if (!cookie) {
       debug("❌ No auth cookie found");
       authCache.isAuthenticated = false;
@@ -213,19 +178,39 @@ async function checkAuth(skipCache = false) {
       return false;
     }
 
-    // ✅ NEW: Validate the session with a real API call
-    const isValid = await validateAuthWithAPI(domainInfo.domain);
+    // ✅ Check if cookie has expired
+    // Chrome cookie expirationDate is in seconds since Unix epoch
+    const now = Math.floor(Date.now() / 1000);
 
-    authCache.isAuthenticated = isValid;
+    if (cookie.expirationDate) {
+      if (cookie.expirationDate <= now) {
+        debug("❌ Auth cookie has expired");
+        authCache.isAuthenticated = false;
+        authCache.lastCheck = Date.now();
+        return false;
+      }
+
+      // Cookie exists and not expired
+      debug(
+        `✅ Auth cookie valid - Domain: ${
+          domainInfo.domain
+        }, Expires: ${new Date(cookie.expirationDate * 1000).toISOString()}`
+      );
+    } else {
+      // Session cookie (no expiration) - valid for browser session
+      debug(
+        `✅ Auth cookie valid (session cookie) - Domain: ${domainInfo.domain}`
+      );
+    }
+
+    authCache.isAuthenticated = true;
     authCache.lastCheck = Date.now();
 
     debug(
-      `Auth check complete - Domain: ${
-        domainInfo.domain
-      }, Cookie exists: YES, Valid session: ${isValid ? "YES ✅" : "NO ❌"}`
+      `Auth check complete - Domain: ${domainInfo.domain}, Cookie: YES ✅, Authenticated: true`
     );
 
-    return isValid;
+    return true;
   } catch (error) {
     console.error("Auth check failed:", error);
     authCache.isAuthenticated = false;
@@ -235,7 +220,7 @@ async function checkAuth(skipCache = false) {
 }
 
 // ============================================
-// ✅ IMPROVED: CLEAR AUTH CACHE (called on 401)
+// CLEAR AUTH CACHE (called on 401)
 // ============================================
 
 function clearAuthCache() {
@@ -251,7 +236,7 @@ function clearAuthCache() {
 }
 
 // ============================================
-// ✅ IMPROVED: BROADCAST 401 ERROR TO PANEL
+// BROADCAST 401 ERROR TO PANEL
 // ============================================
 
 async function broadcast401Error() {
@@ -299,7 +284,7 @@ async function handleAPIRequest(data) {
     const response = await fetch(data.url, options);
     debug("Response status:", response.status);
 
-    // ✅ NEW: Handle 401 errors
+    // ✅ Handle 401 errors
     if (response.status === 401) {
       debug("❌ 401 Unauthorized detected!");
 
