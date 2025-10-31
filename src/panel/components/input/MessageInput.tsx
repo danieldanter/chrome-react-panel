@@ -1,7 +1,8 @@
 // src/panel/components/input/MessageInput.tsx
+// ✅ FIXED: Better initial height handling after authentication
 // Message input with context load button (left) and send button (right)
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { KeyboardEvent, ChangeEvent } from "react";
 import { useAutoResize } from "../../hooks/useAutoResize";
 
@@ -26,14 +27,41 @@ function MessageInput({
   // Auto-resize textarea
   useAutoResize(textareaRef, 100);
 
+  /**
+   * ✅ NEW: Force resize when disabled state changes (after authentication)
+   * This fixes the double-height issue after login
+   */
+  useEffect(() => {
+    if (!disabled && textareaRef.current) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+          const newHeight = Math.min(textareaRef.current.scrollHeight, 100);
+          textareaRef.current.style.height = `${newHeight}px`;
+
+          console.log("[MessageInput] Reset height after auth:", newHeight);
+        }
+      }, 100);
+    }
+  }, [disabled]); // Run when disabled state changes
+
   const handleSend = () => {
     if (!message.trim() || disabled) return;
 
     onSend(message);
     setMessage("");
 
+    // Reset height after sending
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
+
+      // Small delay to ensure state update
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+        }
+      }, 0);
     }
   };
 
@@ -173,7 +201,8 @@ function MessageInput({
           color: "var(--text-primary)",
           maxHeight: "100px",
           lineHeight: 1.5,
-          minHeight: "20px",
+          minHeight: "20px", // ✅ Keep small initial height
+          height: "20px", // ✅ Start with 20px height
           overflowY: "hidden",
         }}
       />
@@ -207,30 +236,27 @@ function MessageInput({
           if (message.trim() && !disabled) {
             e.currentTarget.style.background = "var(--blue-500)";
             e.currentTarget.style.transform = "scale(1.05)";
-            e.currentTarget.style.boxShadow =
-              "0 2px 8px rgba(14, 165, 233, 0.3)";
           }
         }}
         onMouseLeave={(e) => {
           if (message.trim() && !disabled) {
             e.currentTarget.style.background = "var(--blue-600)";
             e.currentTarget.style.transform = "scale(1)";
-            e.currentTarget.style.boxShadow = "none";
-          }
-        }}
-        onMouseDown={(e) => {
-          if (message.trim() && !disabled) {
-            e.currentTarget.style.transform = "scale(0.95)";
-          }
-        }}
-        onMouseUp={(e) => {
-          if (message.trim() && !disabled) {
-            e.currentTarget.style.transform = "scale(1.05)";
           }
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="22" y1="2" x2="11" y2="13" />
+          <polygon points="22 2 15 22 11 13 2 9 22 2" />
         </svg>
       </button>
     </div>

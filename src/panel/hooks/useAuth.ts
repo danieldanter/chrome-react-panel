@@ -1,5 +1,6 @@
 // src/panel/hooks/useAuth.ts
-// ✅ INSTANT LOGIN DETECTION: Hides login overlay immediately, shows loading state
+// ✅ OPTIMIZED: Message-based auth detection (NO POLLING!)
+// Uses the same approach as the old vanilla JS version
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { checkAuth, getDomain } from "../services/api";
@@ -8,7 +9,7 @@ import { setStorage } from "../services/chrome";
 interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
-  isInitializing: boolean; // ✅ NEW: Separate state for post-login initialization
+  isInitializing: boolean;
   domain: string | null;
   error: string | null;
 }
@@ -17,7 +18,7 @@ export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
     isLoading: true,
-    isInitializing: false, // ✅ NEW
+    isInitializing: false,
     domain: null,
     error: null,
   });
@@ -60,7 +61,8 @@ export function useAuth() {
       }
 
       try {
-        const authResult = await checkAuth();
+        // ✅ FIXED: Pass skipCache when skipDebounce is true
+        const authResult = await checkAuth(skipDebounce);
         const domain = authResult.domain || (await getDomain());
 
         console.log("[useAuth] Auth result:", authResult);
@@ -76,16 +78,15 @@ export function useAuth() {
           setAuthState({
             isAuthenticated: true,
             isLoading: false,
-            isInitializing: true, // ✅ NEW: Show "Loading chat..." instead of login
+            isInitializing: true,
             domain,
             error: null,
           });
 
           // ✅ After a brief moment, clear initializing flag
-          // (ChatContainer's initialize() will complete in background)
           setTimeout(() => {
             setAuthState((prev) => ({ ...prev, isInitializing: false }));
-          }, 1500); // Show "Loading chat..." for 1.5s max
+          }, 1500);
         } else {
           setAuthState({
             isAuthenticated: false,
@@ -226,23 +227,32 @@ export function useAuth() {
   }, [checkAuthentication]);
 
   /**
-   * ✅ INSTANT: Cookie monitoring with 50ms delay (ultra-fast!)
+   * ✅✅ OPTIMIZED: ALWAYS-ON Cookie monitoring + MESSAGE-BASED detection
+   * This runs ALL THE TIME and detects BOTH login AND logout
+   * NO POLLING NEEDED - background worker sends messages!
    */
   useEffect(() => {
-    if (!showLoginOverlay) {
-      return;
-    }
-
-    console.log("[useAuth] 🍪 Starting cookie monitoring");
+    console.log("[useAuth] 🍪 Starting cookie monitoring (always-on)");
 
     const handleCookieChange = (
       changeInfo: chrome.cookies.CookieChangeInfo
     ) => {
+      // Check if it's our auth cookie
       if (
         changeInfo.cookie.name === "__Secure-next-auth.session-token" &&
-        changeInfo.cookie.domain.includes("506.ai") &&
-        !changeInfo.removed
+        changeInfo.cookie.domain.includes("506.ai")
       ) {
+        // ✅ LOGOUT DETECTION: Cookie removed
+        if (changeInfo.removed) {
+          console.log("[useAuth] 🚪 Cookie removed! User logged out!");
+
+          // Force show login immediately
+          forceShowLogin("Abgemeldet. Bitte erneut anmelden.");
+
+          return;
+        }
+
+        // ✅ LOGIN DETECTION: Cookie added/changed
         console.log("[useAuth] ⚡ Cookie detected! Verifying auth...");
 
         // ✅ INSTANT: Only 50ms delay for ultra-fast response
@@ -253,7 +263,7 @@ export function useAuth() {
             console.log("[useAuth] 🎉 Login confirmed via cookie!");
             setAuthCheckCount((prev) => prev + 1);
           }
-        }, 50); // ← 50ms for instant feedback!
+        }, 50);
       }
     };
 
@@ -263,47 +273,42 @@ export function useAuth() {
       console.log("[useAuth] ⏹️ Stopped cookie monitoring");
       chrome.cookies.onChanged.removeListener(handleCookieChange);
     };
-  }, [showLoginOverlay, checkAuthentication]);
+  }, [checkAuthentication, forceShowLogin]);
 
   /**
-   * ✅ Fast polling every 1 second as backup
+   * ✅✅ NEW: Listen for AUTH_STATE_CHANGED messages from background
+   * This is the EFFICIENT way - no polling needed!
+   * Background worker sends message when cookie changes
    */
   useEffect(() => {
-    if (!showLoginOverlay) {
-      return;
-    }
+    console.log(
+      "[useAuth] 📨 Setting up message listener for background notifications"
+    );
 
-    console.log("[useAuth] ⚡ Starting polling (1s intervals)");
+    const handleBackgroundMessage = (message: {
+      type?: string;
+      action?: string;
+      domain?: string;
+    }) => {
+      const messageType = message.type || message.action;
 
-    const checkNow = async () => {
-      const isAuth = await checkAuthentication(true, true);
+      // ✅ AUTH_STATE_CHANGED from background worker
+      if (messageType === "AUTH_STATE_CHANGED") {
+        console.log("[useAuth] 📬 Received AUTH_STATE_CHANGED from background");
+        console.log("[useAuth] 🔄 Rechecking auth (message-driven)");
 
-      if (isAuth) {
-        console.log("[useAuth] 🎉 Login detected via polling!");
-        setAuthCheckCount((prev) => prev + 1);
-        return true;
+        // Recheck auth immediately (skipCache = true)
+        checkAuthentication(true, true);
       }
-      return false;
     };
 
-    // Check immediately
-    checkNow();
-
-    // Then poll every 1 second
-    const intervalId = setInterval(async () => {
-      console.log("[useAuth] 🔍 Polling...");
-
-      const shouldStop = await checkNow();
-      if (shouldStop) {
-        clearInterval(intervalId);
-      }
-    }, 1000);
+    chrome.runtime.onMessage.addListener(handleBackgroundMessage);
 
     return () => {
-      console.log("[useAuth] ⏹️ Stopped polling");
-      clearInterval(intervalId);
+      console.log("[useAuth] 📪 Removed message listener");
+      chrome.runtime.onMessage.removeListener(handleBackgroundMessage);
     };
-  }, [showLoginOverlay, checkAuthentication]);
+  }, [checkAuthentication]);
 
   /**
    * ✅ Listen for 401 errors
@@ -323,10 +328,16 @@ export function useAuth() {
     };
   }, [forceShowLogin]);
 
+  /**
+   * ❌ REMOVED: Polling is NO LONGER NEEDED!
+   * We use message-based communication instead (like the old vanilla JS version)
+   * This saves performance and battery life
+   */
+
   return {
     isAuthenticated: authState.isAuthenticated,
     isLoading: authState.isLoading,
-    isInitializing: authState.isInitializing, // ✅ NEW: Expose initializing state
+    isInitializing: authState.isInitializing,
     domain: authState.domain,
     error: authState.error,
     showLoginOverlay,

@@ -1,17 +1,23 @@
 // src/panel/services/api.ts
-// CompanyGPT API communication (via background worker for CORS bypass)
+// ✅ FIXED: Pass skipCache parameter to background worker for instant auth checks
 
 import { sendToBackground, apiRequest, getStorage } from "./chrome";
 import type { ChatPayload, Folder, Role, AuthState } from "../types";
 
 /**
  * Check authentication status
+ * @param skipCache - If true, forces background worker to bypass cache
  */
-export async function checkAuth(): Promise<AuthState> {
+export async function checkAuth(
+  skipCache: boolean = false
+): Promise<AuthState> {
   try {
-    console.log("[API] Checking auth...");
+    console.log("[API] Checking auth...", { skipCache });
 
-    const response = await sendToBackground<AuthState>("CHECK_AUTH");
+    // ✅ FIXED: Pass skipCache to background worker
+    const response = await sendToBackground<AuthState>("CHECK_AUTH", {
+      skipCache, // ← This tells background to bypass cache!
+    });
 
     console.log("[API] Auth response:", response);
 
@@ -75,7 +81,7 @@ export async function fetchFolders(): Promise<Folder[]> {
     return response.folders || [];
   } catch (error) {
     console.error("[API] Fetch folders failed:", error);
-    return [];
+    throw error; // ✅ Throw so useChat can handle 401
   }
 }
 
@@ -104,7 +110,7 @@ export async function fetchRoles(): Promise<Role[]> {
     return response.roles || [];
   } catch (error) {
     console.error("[API] Fetch roles failed:", error);
-    return [];
+    throw error; // ✅ Throw so useChat can handle 401
   }
 }
 
@@ -135,9 +141,6 @@ export async function sendChatMessage(payload: ChatPayload): Promise<unknown> {
   }
 }
 
-/**
- * Get page context from content script
- */
 /**
  * Get page context from content script
  */

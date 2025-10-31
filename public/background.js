@@ -220,6 +220,101 @@ async function checkAuth(skipCache = false) {
 }
 
 // ============================================
+// OPTIMIZED COOKIE MONITORING (Add to background.js)
+// ============================================
+// This replaces polling with message-based communication
+// Add this AFTER the checkAuth() function definition
+
+/**
+ * ✅ OPTIMIZED: Cookie change listener that notifies panel immediately
+ * This is more efficient than polling - only checks when cookies actually change
+ */
+let cookieDebounceTimer = null;
+
+chrome.cookies.onChanged.addListener((changeInfo) => {
+  try {
+    const cookie = changeInfo.cookie;
+
+    // Only watch for our auth cookie
+    if (cookie.name !== COOKIE_NAME) return;
+    if (!cookie.domain.includes("506.ai")) return;
+
+    debug("🍪 Auth cookie changed:", {
+      removed: changeInfo.removed,
+      domain: cookie.domain,
+      cause: changeInfo.cause,
+    });
+
+    // Debounce to avoid multiple rapid checks (300ms delay)
+    if (cookieDebounceTimer) clearTimeout(cookieDebounceTimer);
+
+    cookieDebounceTimer = setTimeout(async () => {
+      debug("🔄 Processing cookie change...");
+
+      // ✅ LOGOUT: Cookie removed
+      if (changeInfo.removed) {
+        debug("🚪 Cookie removed - user logged out");
+
+        // Clear auth cache
+        clearAuthCache();
+
+        // Notify panel immediately (no need to check)
+        chrome.runtime
+          .sendMessage({
+            type: "AUTH_STATE_CHANGED",
+            action: "AUTH_STATE_CHANGED", // Both for compatibility
+            domain: null,
+            isAuthenticated: false,
+          })
+          .catch(() => {
+            // Ignore if panel not open
+          });
+
+        return;
+      }
+
+      // ✅ LOGIN: Cookie added/changed
+      debug("🍪 Cookie added/changed - checking auth");
+
+      // Re-detect domain from cookies
+      const domainInfo = await detectActiveDomain();
+
+      // Update cache
+      authCache.activeDomain = domainInfo.domain;
+      authCache.hasMultipleDomains = domainInfo.hasMultiple;
+      authCache.availableDomains = domainInfo.availableDomains;
+      authCache.lastCheck = 0; // Force recheck next time
+
+      // Save to storage
+      await chrome.storage.local.set({
+        lastKnownDomain: domainInfo.domain || null,
+      });
+
+      // ⚡ NOTIFY PANEL IMMEDIATELY
+      // This is the key - no polling needed!
+      chrome.runtime
+        .sendMessage({
+          type: "AUTH_STATE_CHANGED",
+          action: "AUTH_STATE_CHANGED", // Both for compatibility
+          domain: domainInfo.domain,
+          hasMultipleDomains: domainInfo.hasMultiple,
+          availableDomains: domainInfo.availableDomains,
+        })
+        .catch(() => {
+          // Ignore if panel not open
+          debug("Panel not open, message not delivered");
+        });
+
+      debug("📨 AUTH_STATE_CHANGED message sent to panel");
+    }, 300); // 300ms debounce
+  } catch (error) {
+    console.error("Cookie change handler error:", error);
+  }
+});
+
+debug("✅ Cookie change listener registered (message-based, no polling!)");
+
+// ============================================
 // CLEAR AUTH CACHE (called on 401)
 // ============================================
 
@@ -327,7 +422,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       switch (action) {
         case "CHECK_AUTH": {
-          const isAuthenticated = await checkAuth(request.skipCache);
+          // ✅ FIXED: Read skipCache from request.data, not request directly
+          const skipCache = request.data?.skipCache || false;
+
+          debug("CHECK_AUTH called with skipCache:", skipCache);
+
+          const isAuthenticated = await checkAuth(skipCache);
+
           sendResponse({
             success: true,
             isAuthenticated,
